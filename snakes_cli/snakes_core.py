@@ -483,7 +483,7 @@ Bug描述: {bug_desc}
 
 Bug: {bug_desc}
 
-请输出修复后的{finger}函数的完整代码(含import)。包裹在```python```中。"""
+请输出修复后的{function}函数的完整代码(含import)。包裹在```python```中。"""
 
         return self._call(self.models["fix_snake"], system, user, temperature=self.temp["fix"])
 
@@ -648,7 +648,7 @@ Bug描述: {bug_desc}
 
 蛇头分析: {head_analysis[:800]}
 
-{f"已有测试(必须通过):\n```python\n{test_code[:1500]}\n```" if test_code else ""}
+{("已有测试(必须通过):\n```python\n" + test_code[:1500] + "\n```" if test_code else "")}
 
 请在不看原始实现的情况下，从零重写此函数。只输出```python```包裹的完整函数代码。"""
 
