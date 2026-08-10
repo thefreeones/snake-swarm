@@ -196,7 +196,7 @@ S2_SNAKE_HEAD_PLAN = """# `process_sales_csv(input_path, output_path)` 实现计
 - 日期解析失败的行标记为异常并跳过
 - 空字符串,空白字符串视为缺失值"""
 
-S2_CODE = """import csv
+S2_CODE = '''import csv
 import logging
 import json
 from collections import defaultdict
@@ -406,7 +406,7 @@ def process_sales_csv(input_path: str, output_path: str) -> Dict[str, Any]:
         'skipped_rows': skipped,
         'product_count': len(summary),
         'total_amount': round(sum(s['total_amount'] for s in summary), 2)
-    }"""
+    }'''
 
 # S2: 结构化 deviation_log(主动偏离)
 S2_STRUCTURED_DEVLOG = """[步骤ID] step_1_library_choice
@@ -891,7 +891,7 @@ def build_conclusion(comparison, r11_results):
             if sa['A_纯代码'].get('avg_R11', 0) <= sa['A_纯代码'].get('avg_P2', 0):
                 lines.append(f"  → A组(纯代码)偏离发现数持平或减少,结构化devlog未引入干扰")
             if sa['B_代码+devlog'].get('avg_R11', 0) <= sa['B_代码+devlog'].get('avg_P2', 0):
-                lines.append(f"  → B组(代码+devlog)偏离发现数持平或减少,结构化devlog+"我无法确认"字段可能帮助法官更准确判断")
+                lines.append(f"  → B组(代码+devlog)偏离发现数持平或减少,结构化devlog+'我无法确认'字段可能帮助法官更准确判断")
         elif sid == 'S2':
             lines.append(f"  分析: S2为有偏离场景,理想情况下法官应发现所有真实偏离.")
             lines.append(f"  已知真实偏离: pandas→csv切换, .xlsx降级, 日志缺原始行内容, 未生成异常数据文件, 日期解析方式变更, 编码回退未实现")
