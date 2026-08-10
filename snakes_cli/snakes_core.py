@@ -256,11 +256,9 @@ class PatternStore:
         for p in self.patterns.values():
             if p.status in ("deprecated", "archived"):
                 continue
-            # 关键词匹配打分
             keywords = (p.trigger_condition + " " + p.lesson).lower()
             score = sum(1 for word in query.split()
                        if len(word) > 2 and word in keywords)
-            # 置信度加权
             score *= p.confidence
             if score > 0:
                 scored.append((score, p))
@@ -281,6 +279,31 @@ class PatternStore:
 
 
 # ================================================================
+# v0.7 模式B — 项目构建数据结构
+# ================================================================
+@dataclass
+class BuildModule:
+    """模式B: 单个模块定义"""
+    name: str           # 模块名, 如 "loader"
+    description: str    # 功能描述
+    contract: dict      # 接口契约: {inputs, outputs, functions, dependencies}
+    code: str = ""      # 生成的代码
+    tests: str = ""     # 生成的测试
+    status: str = "pending"  # pending | building | done | failed
+
+
+@dataclass
+class BuildResult:
+    """模式B: 项目构建结果"""
+    project_name: str
+    modules: list         # [BuildModule, ...]
+    integration_code: str # 集成代码(main/__init__)
+    success: bool
+    error: str = ""
+    total_tokens: int = 0
+    integration_test_passed: bool = False
+
+
 # 模板缓存 (P13)
 # ================================================================
 FIX_TEMPLATES = {
@@ -1003,6 +1026,225 @@ Diff行数变化: {diff_lines}
             success_count=sum(1 for r in results if r.success),
             fail_count=sum(1 for r in results if not r.success),
         )
+
+    # ══════════════════════════════════════════════════════════
+    # v0.7 模式B — 项目构建
+    # ══════════════════════════════════════════════════════════
+
+    def build(self, spec_path: str, output_dir: str = "./output") -> BuildResult:
+        """
+        模式B: 从需求文档构建完整项目。
+
+        Args:
+            spec_path: 需求文档路径(.md或.txt)
+            output_dir: 输出目录
+
+        Returns:
+            BuildResult
+        """
+        with open(spec_path, encoding="utf-8") as f:
+            spec = f.read()
+
+        total_tokens = 0
+        project_name = os.path.splitext(os.path.basename(spec_path))[0]
+
+        try:
+            # 1. 蛇头拆解需求 → 模块+契约
+            modules = self._decompose_requirements(spec)
+            total_tokens += 1  # approximate
+
+            # 2. 契约冻结（生成接口定义）
+            contracts_text = self._freeze_contracts(modules)
+
+            # 3. 逐模块实现
+            for mod in modules:
+                mod.status = "building"
+                code, test_code, tokens = self._generate_module(mod, contracts_text)
+                mod.code = code
+                mod.tests = test_code
+                mod.status = "done"
+                total_tokens += tokens
+
+            # 4. 集成
+            integration, int_tokens, int_test_ok = self._integrate_modules(
+                modules, project_name)
+            total_tokens += int_tokens
+
+            # 5. 输出到目录
+            os.makedirs(output_dir, exist_ok=True)
+            for mod in modules:
+                mod_path = os.path.join(output_dir, f"{mod.name}.py")
+                with open(mod_path, "w", encoding="utf-8") as f:
+                    f.write(mod.code or f"# {mod.name} - {mod.description}\n# TODO\n")
+            init_path = os.path.join(output_dir, "__init__.py")
+            with open(init_path, "w", encoding="utf-8") as f:
+                f.write(integration or f"# {project_name}\n")
+
+            success = all(m.status == "done" for m in modules)
+            return BuildResult(
+                project_name=project_name,
+                modules=modules,
+                integration_code=integration or "",
+                success=success,
+                total_tokens=total_tokens,
+                integration_test_passed=int_test_ok,
+            )
+
+        except Exception as e:
+            return BuildResult(
+                project_name=project_name,
+                modules=modules if 'modules' in dir() else [],
+                integration_code="",
+                success=False,
+                error=str(e),
+                total_tokens=total_tokens,
+            )
+
+    def _decompose_requirements(self, spec: str) -> list[BuildModule]:
+        """蛇头拆解需求为模块列表+接口契约"""
+        system = """你是软件架构师。将需求文档拆解为可独立实现的模块。
+
+输出JSON格式:
+{
+  "modules": [
+    {
+      "name": "模块名(snake_case)",
+      "description": "功能描述",
+      "contract": {
+        "inputs": ["输入参数类型"],
+        "outputs": ["输出类型"],
+        "functions": ["公开函数签名"],
+        "dependencies": ["依赖的其他模块名"]
+      }
+    }
+  ]
+}
+
+规则:
+- 每个模块单一职责,4-7个模块为宜
+- 模块间通过明确的接口契约通信
+- 标注模块间依赖关系
+- 不允许循环依赖"""
+
+        user = f"需求文档:\n{spec[:4000]}\n\n请拆解为模块列表。"
+        result = self._call(
+            self.models["heavy_head"], system, user,
+            temperature=0.3, max_tokens=3000)
+
+        try:
+            match = re.search(r'\{.*\}', result["content"], re.DOTALL)
+            if match:
+                parsed = json.loads(match.group(0))
+                modules = []
+                for m in parsed.get("modules", []):
+                    modules.append(BuildModule(
+                        name=m["name"],
+                        description=m.get("description", ""),
+                        contract=m.get("contract", {}),
+                    ))
+                return modules
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+        # Fallback: 从文本提取模块名
+        names = re.findall(r'["\']name["\']\s*:\s*["\'](\w+)["\']', result["content"])
+        return [BuildModule(name=n, description="",
+                contract={}) for n in names[:5]]
+
+    def _freeze_contracts(self, modules: list[BuildModule]) -> str:
+        """冻结契约: 生成接口定义文档"""
+        lines = ["# 模块契约(冻结)\n"]
+        for i, m in enumerate(modules):
+            c = m.contract
+            deps = c.get("dependencies", [])
+            lines.append(f"\n## {i+1}. {m.name}")
+            lines.append(f"   描述: {m.description}")
+            if c.get("functions"):
+                for fn in c["functions"]:
+                    lines.append(f"   函数: {fn}")
+        return "\n".join(lines)
+
+    def _generate_module(self, mod: BuildModule,
+                         contracts_text: str) -> tuple[str, str, int]:
+        """实现单个模块: 生成代码+测试"""
+        system = """你是Python开发专家。根据模块契约实现完整的模块代码。
+
+规则:
+- 严格遵守契约中的函数签名
+- 导入仅使用标准库(除非契约明确要求第三方库)
+- 同时生成对应的pytest测试代码
+- 输出格式: 先```python模块代码```, 再```python测试代码```"""
+
+        deps = mod.contract.get("dependencies", [])
+        dep_warning = ""
+        if deps:
+            dep_warning = f"\n依赖模块: {', '.join(deps)}\n(这些模块的接口参见契约文档)"
+
+        user = f"""模块: {mod.name}
+描述: {mod.description}
+
+契约:
+{contracts_text}
+{dep_warning}
+
+请实现{mod.name}模块的完整代码和测试。"""
+
+        result = self._call(
+            self.models.get("fix_snake", "deepseek-v4-pro"),
+            system, user, temperature=0.3, max_tokens=4096)
+
+        content = result["content"]
+        # 提取代码和测试
+        code = ""; test_code = ""
+        code_match = re.search(r'```python\n(.*?)```', content, re.DOTALL)
+        if code_match:
+            code = code_match.group(1)
+        # 找第二个```python```块作为测试
+        rest = content[code_match.end():] if code_match else content
+        test_match = re.search(r'```python\n(.*?)```', rest, re.DOTALL)
+        if test_match:
+            test_code = test_match.group(1)
+
+        return code, test_code, result["total_tokens"]
+
+    def _integrate_modules(self, modules: list[BuildModule],
+                           project_name: str) -> tuple[str, int, bool]:
+        """集成所有模块: 生成__init__/main + 集成测试"""
+        mod_list = "\n".join(
+            f"- {m.name}: {m.description[:60]}"
+            f" (提供: {', '.join(m.contract.get('functions', ['?']))})"
+            for m in modules
+        )
+
+        system = """你是Python集成专家。将多个独立实现的模块集成为可运行的项目。
+
+输出格式: 只输出```python```包裹的集成代码(__init__.py或main.py)"""
+
+        user = f"""项目: {project_name}
+
+模块列表:
+{mod_list}
+
+请生成集成代码,导入所有模块并暴露公共API。"""
+
+        result = self._call(
+            self.models.get("light_head", "deepseek-v4-pro"),
+            system, user, temperature=0.3, max_tokens=2000)
+
+        content = result["content"]
+        match = re.search(r'```python\n(.*?)```', content, re.DOTALL)
+        integration = match.group(1) if match else content
+
+        # 简单集成测试: 检查所有模块代码语法
+        test_ok = True
+        for mod in modules:
+            if mod.code:
+                try:
+                    compile(mod.code, f"{mod.name}.py", "exec")
+                except SyntaxError:
+                    test_ok = False
+
+        return integration, result["total_tokens"], test_ok
 
     # ══════════════════════════════════════════════════════════
     # v0.7 角色化裁决引擎

@@ -299,6 +299,11 @@ def main():
     # templates
     sub.add_parser("templates", help="列出修复模板")
 
+    # build (v0.7 模式B)
+    p_build = sub.add_parser("build", help="从需求文档构建项目")
+    p_build.add_argument("--spec", required=True, help="需求文档路径(.md)")
+    p_build.add_argument("--output", default="./output", help="输出目录")
+
     args = parser.parse_args()
 
     if args.command == "fix":
@@ -309,8 +314,40 @@ def main():
         cmd_config(args)
     elif args.command == "templates":
         cmd_templates(args)
+    elif args.command == "build":
+        cmd_build(args)
     else:
         parser.print_help()
+
+
+def cmd_build(args):
+    """模式B: 需求→项目"""
+    cfg = load_config()
+    api_key = get_api_key(cfg)
+
+    from snakes_core import Snakes
+    snakes = Snakes(
+        api_key=api_key,
+        base_url=cfg.get("base_url", "https://n.tokeness.io/v1"),
+        models=cfg.get("models", {}),
+    )
+
+    print(f"🐍🐍 蛇群模式B — 项目构建")
+    print(f"   需求: {args.spec}")
+    print(f"   输出: {args.output}")
+    print()
+
+    result = snakes.build(spec_path=args.spec, output_dir=args.output)
+
+    if result.success:
+        print(f"✅ 构建成功: {result.project_name}")
+        print(f"   模块: {len(result.modules)}个")
+        for m in result.modules:
+            print(f"     [{m.status}] {m.name}: {m.description[:50]}")
+        print(f"   集成测试: {'PASS' if result.integration_test_passed else 'FAIL'}")
+        print(f"   Token: ~{result.total_tokens}")
+    else:
+        print(f"❌ 构建失败: {result.error}")
 
 
 if __name__ == "__main__":
