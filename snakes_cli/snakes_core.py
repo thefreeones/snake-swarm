@@ -133,7 +133,9 @@ class FixResult:
     tokens: dict = field(default_factory=dict)
     audit: dict = field(default_factory=dict)
     error: str = ""
-    template_hit: Optional[str] = None  # 模板命中名称
+    template_hit: Optional[str] = None
+    rewrite_attempted: bool = False  # v0.7 黑箱重写是否触发
+    tail_report: Optional['TailReport'] = None  # v0.7 蛇尾自述
 
 
 @dataclass
@@ -168,6 +170,16 @@ class AdjudicationResult:
     minority_preserved: bool
     total_tokens: int
     summary: str
+
+
+@dataclass
+class TailReport:
+    """蛇尾结构化自述 (v0.7)"""
+    fact: dict        # 系统自动填充: modified_files, diff_lines, test_passed, test_total
+    inference: dict   # 模型生成+证据: impact_scope, risk_assessment, edge_cases_covered
+    uncertainty: list # 强制列出无法确认项
+    validated: bool   # claims vs system records 一致性校验结果
+    validation_issues: list  # 校验发现的不一致
 
 
 # ================================================================
@@ -425,6 +437,207 @@ except Exception as e:
         return "".join(diff)
 
     # ══════════════════════════════════════════════════════════
+    # v0.7 黑箱重写 (B阶段修复)
+    # ══════════════════════════════════════════════════════════
+
+    def _extract_contract(self, original_code: str, function: str) -> dict:
+        """从原代码提取契约: 函数签名 + import + 禁止事项"""
+        import ast as _ast
+        contract = {
+            "function": function,
+            "signature": "",
+            "imports": [],
+            "decorators": [],
+            "public_api_warning": False,
+        }
+        try:
+            tree = _ast.parse(original_code)
+            for node in _ast.walk(tree):
+                # 收集import
+                if isinstance(node, (_ast.Import, _ast.ImportFrom)):
+                    contract["imports"].append(_ast.unparse(node))
+                # 找到目标函数
+                if isinstance(node, _ast.FunctionDef) and node.name == function:
+                    contract["signature"] = f"def {function}({_ast.unparse(node.args)}):"
+                    contract["decorators"] = [_ast.unparse(d) for d in node.decorator_list]
+                    # 检查是否为公共API (不以_开头)
+                    if not function.startswith('_'):
+                        contract["public_api_warning"] = True
+        except SyntaxError:
+            # 退而求其次: 正则提取
+            sig_match = re.search(rf'def {function}\((.*?)\):', original_code)
+            if sig_match:
+                contract["signature"] = f"def {function}({sig_match.group(1)}):"
+        return contract
+
+    def _run_blackbox_rewrite(self, contract: dict, bug_desc: str,
+                              head_analysis: str, test_code: str = "") -> dict:
+        """
+        B阶段: 黑箱重写。模型不看原始实现，只基于契约+bug描述+测试重写。
+
+        输入:
+          - contract: 函数签名、import、装饰器
+          - bug_desc: 缺陷描述
+          - head_analysis: 蛇头根因分析
+          - test_code: 已有测试代码(可选)
+
+        约束:
+          - 不得修改函数签名
+          - 不得修改装饰器
+          - 不得新增第三方import
+          - 必须通过已有测试
+        """
+        model = self.models["rewrite_snake"]
+        temp = self.temp["rewrite"]
+
+        system = """你是Python代码重写专家。你的任务是在【不看原始实现】的前提下，根据契约重写函数。
+
+约束（不可违反）:
+1. 保持给定的函数签名完全不变（参数名、类型注解、返回值）
+2. 保持所有装饰器不变
+3. 不引入新的第三方库import
+4. 只使用标准库和已声明的import
+5. 不修改任何不相关的代码
+
+输出要求:
+- 输出完整的函数代码(含装饰器和docstring)
+- 包裹在```python```中
+- 函数名必须与原函数名一致"""
+
+        imports_text = "\n".join(contract["imports"])
+        decorators_text = "\n".join(contract["decorators"]) if contract["decorators"] else "(无装饰器)"
+        api_warning = ""
+        if contract["public_api_warning"]:
+            api_warning = "\n⚠️ 警告: 此函数为公共API，签名不可变。修改签名会破坏所有调用方。"
+
+        user = f"""任务: 重写函数 {contract['function']}
+
+契约:
+- 函数签名: {contract['signature']}
+- 装饰器: {decorators_text}
+- 可用import:
+```python
+{imports_text}
+```
+{api_warning}
+
+Bug描述: {bug_desc}
+
+蛇头分析: {head_analysis[:800]}
+
+{f"已有测试(必须通过):\n```python\n{test_code[:1500]}\n```" if test_code else ""}
+
+请在不看原始实现的情况下，从零重写此函数。只输出```python```包裹的完整函数代码。"""
+
+        return self._call(model, system, user, temperature=temp, max_tokens=4096)
+
+    # ══════════════════════════════════════════════════════════
+    # v0.7 蛇尾结构化自述
+    # ══════════════════════════════════════════════════════════
+
+    def _generate_tail(self, fixed_code: str, original_code: str,
+                       function: str, test_results: str = "",
+                       fix_description: str = "") -> TailReport:
+        """
+        蛇尾生成结构化自述。
+
+        事实字段(系统填充, LLM不能修改):
+        - diff行数、文件变更、测试结果
+
+        推断字段(LLM生成, 必须标注证据):
+        - 影响范围、风险评估、边界覆盖
+
+        不确定字段([我无法确认]强制):
+        - LLM必须列出的无法确认项
+        """
+        # 1. 事实字段 — 系统自动填充
+        orig_lines = original_code.split("\n")
+        fixed_lines = fixed_code.split("\n")
+        diff_lines = abs(len(fixed_lines) - len(orig_lines))
+
+        # 提取测试结果
+        test_passed = 0; test_total = 0
+        if test_results:
+            for line in test_results.split("\n"):
+                if "PASSED" in line or "OK" in line:
+                    try:
+                        test_total += 1
+                        test_passed += 1
+                    except: pass
+                elif "FAILED" in line:
+                    test_total += 1
+
+        fact = {
+            "function": function,
+            "diff_lines_changed": diff_lines,
+            "test_passed": test_passed,
+            "test_total": test_total,
+            "has_test_coverage": test_total > 0,
+        }
+
+        # 2. 推断字段 — LLM生成
+        system = """你是蛇群的蛇尾自述模块。基于修复代码和原始代码，生成结构化自述报告。
+
+规则:
+- 推断字段必须标注证据来源(如"基于diff第X行"或"测试test_xxx通过")
+- [我无法确认]字段必须列出所有你无法100%确定的风险
+- 使用JSON格式输出"""
+
+        user = f"""函数: {function}
+修复描述: {fix_description[:300]}
+
+原始代码行数: {len(orig_lines)}
+修复后代码行数: {len(fixed_lines)}
+Diff行数变化: {diff_lines}
+
+请输出JSON:
+{{
+  "inference": {{
+    "impact_scope": "该修复影响的代码范围(需证据)",
+    "risk_assessment": "潜在风险(需证据)",
+    "edge_cases_covered": "已处理的边界条件(需证据)",
+    "evidence_basis": ["证据来源1", "证据来源2"]
+  }},
+  "uncertainty": [
+    "我无法确认：XXX",
+    "我无法确认：YYY"
+  ]
+}}"""
+
+        try:
+            result = self._call(
+                self.models.get("light_head", "deepseek-v4-pro"),
+                system, user, temperature=0.2, max_tokens=800)
+            parsed = json.loads(re.search(r'\{.*\}', result["content"],
+                                re.DOTALL).group(0) if re.search(r'\{.*\}',
+                                result["content"], re.DOTALL) else "{}")
+            inference = parsed.get("inference", {})
+            uncertainty = parsed.get("uncertainty", [])
+        except Exception:
+            inference = {"impact_scope": fix_description[:200]}
+            uncertainty = ["无法自动解析自述"]
+
+        # 3. 校验: 推断声明 vs 系统记录
+        validation_issues = []
+        impact = inference.get("impact_scope", "").lower()
+        if "已验证" in impact or "已经测试" in impact:
+            if test_total == 0:
+                validation_issues.append(
+                    "蛇尾声称'已验证'但系统无测试记录 → 高风险标记")
+
+        if inference.get("edge_cases_covered") and test_total == 0:
+            validation_issues.append(
+                "蛇尾声称覆盖边界条件但无测试验证")
+
+        return TailReport(
+            fact=fact,
+            inference=inference,
+            uncertainty=uncertainty,
+            validated=len(validation_issues) == 0,
+            validation_issues=validation_issues,
+        )
+
+    # ══════════════════════════════════════════════════════════
     # 公共API
     # ══════════════════════════════════════════════════════════
 
@@ -492,10 +705,35 @@ except Exception as e:
             patch = self._generate_patch(file_path, original_full,
                                         original_full.replace(head["target_code"], fixed_code))
 
-            # 8. 判定
+            # 8. 判断是否需要黑箱重写 (B阶段)
+            rewrite_attempted = False
+            if not audit["passed"]:
+                contract = self._extract_contract(original_full, function)
+                rewrite = self._run_blackbox_rewrite(
+                    contract, bug_description, head["content"],
+                    test_code=trigger_test or "")
+                tokens["rewrite"] = rewrite["total_tokens"]
+
+                # 提取重写代码
+                rw_match = re.search(r'```python\n(.*?)```', rewrite["content"], re.DOTALL)
+                if rw_match:
+                    rewritten_code = rw_match.group(1)
+                    # 对重写代码做L1审计
+                    audit = self._audit(original_full, rewritten_code, function)
+                    fixed_code = rewritten_code
+                    patch = self._generate_patch(file_path, original_full,
+                                                original_full.replace(head["target_code"], rewritten_code))
+                    rewrite_attempted = True
+
+            # 9. 蛇尾自述
+            tail = self._generate_tail(
+                fixed_code, head["target_code"], function,
+                test_results="", fix_description=fix["content"][:300])
+
+            # 10. 判定
             success = audit["passed"]
 
-            # 9. v0.7 角色化裁决（可选）
+            # 11. v0.7 角色化裁决（可选）
             adjudication = None
             if enable_judges:
                 adjudication = self._adjudicate(file_path, patch, bug_id=bug_id)
@@ -514,6 +752,8 @@ except Exception as e:
                 tokens=tokens,
                 audit=audit,
                 error="" if success else "; ".join(audit["issues"]),
+                rewrite_attempted=rewrite_attempted,
+                tail_report=tail,
             )
             if adjudication:
                 result._adjudication = adjudication

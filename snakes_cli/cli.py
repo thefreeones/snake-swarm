@@ -88,12 +88,29 @@ def cmd_fix(args):
 
     if result.success:
         print("✅ 修复成功")
+        if hasattr(result, 'rewrite_attempted') and result.rewrite_attempted:
+            print("   ♻️  通过黑箱重写(B阶段)")
     else:
         print(f"❌ 修复失败: {result.error}")
 
     print(f"\n📋 根因分析:\n   {result.root_cause[:200]}...")
     print(f"\n🔧 修复方案:\n   {result.fix_description[:200]}...")
     print(f"\n📊 Token: {result.tokens}")
+
+    # v0.7 蛇尾自述
+    if hasattr(result, 'tail_report') and result.tail_report:
+        t = result.tail_report
+        print(f"\n🐍 蛇尾自述:")
+        print(f"   事实: diff={t.fact.get('diff_lines_changed',0)}行, "
+              f"测试={t.fact.get('test_passed',0)}/{t.fact.get('test_total',0)}")
+        if t.inference:
+            print(f"   推断: {t.inference.get('impact_scope','?')[:80]}")
+        for u in t.uncertainty[:2]:
+            print(f"   ⚠️  {u[:80]}")
+        if t.validation_issues:
+            for vi in t.validation_issues:
+                print(f"   🔴 {vi}")
+
 
     if result.audit:
         print(f"\n🔍 审计: {'PASS' if result.audit['passed'] else 'FAIL'}")
