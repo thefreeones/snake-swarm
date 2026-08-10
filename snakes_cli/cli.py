@@ -78,6 +78,7 @@ def cmd_fix(args):
         error_type=args.error_type or "",
         trigger_test=args.trigger,
         use_cache=False,
+        enable_judges=args.judges,
     )
 
     if result.template_hit:
@@ -105,6 +106,14 @@ def cmd_fix(args):
         with open(patch_file, "w") as f:
             f.write(result.patch)
         print(f"\n📄 Patch已保存: {patch_file}")
+
+    # v0.7 裁决结果显示
+    if args.judges and hasattr(result, '_adjudication'):
+        adj = result._adjudication
+        print(f"\n⚖️  三角色裁决: {adj.final_verdict} ({adj.conflict_type or '一致'})")
+        print(f"   {adj.summary}")
+        for v in adj.verdicts:
+            print(f"   [{v.role}] {v.verdict} (置信度{v.confidence}, {v.severity})")
 
     # L3 提示
     if result.audit and result.audit["passed"] and result.audit.get("issues"):
@@ -235,6 +244,7 @@ def main():
     p_fix.add_argument("bug_description", help="Bug描述")
     p_fix.add_argument("--error-type", help="错误类型")
     p_fix.add_argument("--trigger", help="快速验证输入,如 \"'abc', 1\"")
+    p_fix.add_argument("--judges", action="store_true", help="启用三角色裁决(v0.7)")
 
     # scan
     p_scan = sub.add_parser("scan", help="批量扫描+修复")

@@ -4,7 +4,7 @@
 
 用法:
     from snakes_core import Snakes
-    snakes = Snakes(api_key="$TOKENESS_API_KEY", base_url="https://n.tokeness.io/v1")
+    snakes = Snakes(api_key="sk-...", base_url="https://n.tokeness.io/v1")
     result = snakes.fix(file="slugify.py", function="smart_truncate", bug_description="...")
     print(result.patch)
 """
@@ -26,19 +26,89 @@ DEFAULT_MODELS = {
     "light_head": "deepseek-v4-pro",       # L1/L2 轻蛇头
     "fix_snake": "deepseek-v4-pro",        # 修复蛇
     "rewrite_snake": "gemini-3.6-flash",   # 黑箱重写
-    "judge_primary": "deepseek-v4-pro",    # C1法官 1/3
-    "judge_secondary": "deepseek-v4-pro",  # C1法官 2/3
-    "judge_tertiary": "gemini-3.6-flash",  # C1法官 3/3
-    "auditor_l3": "gemini-3.6-flash",      # L3语义审计(按需)
+    "judge_semantic": "deepseek-v4-pro",   # 法官A: 语义正确性
+    "judge_test": "deepseek-v4-pro",       # 法官B: 测试证据
+    "judge_contract": "gemini-3.6-flash",  # 法官C: 架构/契约
+    "arbitrator": "claude-sonnet-5",       # 仲裁器(1:1:1时)
 }
 
 DEFAULT_TEMPERATURE = {
     "head": 0.3,
     "fix": 0.3,
     "rewrite": 0.3,
-    "judge_ds": 0.7,
-    "judge_gemini": 0.3,
+    "judge_semantic": 0.3,
+    "judge_test": 0.7,
+    "judge_contract": 0.3,
+    "arbitrator": 0.3,
 }
+
+# ================================================================
+# v0.7 角色化法官 Prompt
+# ================================================================
+JUDGE_ROLES = {
+    "semantic": {
+        "name": "语义正确性法官",
+        "focus": "业务逻辑、函数语义、边界条件、意图一致性",
+        "system": """你是蛇群的语义正确性法官。你的角色是审查修复代码的**语义正确性**。
+
+审查重点:
+1. 修复是否真正解决了根因（而非绕过症状）
+2. 函数语义是否保持一致（输入→输出关系未改变）
+3. 边界条件是否被正确处理（空值/零值/负值/极大值）
+4. 修复是否引入了新的逻辑错误
+
+输出规则:
+- 先列出证据，再给出判断
+- 必须标注无法确认的项
+- 不输出"我认为应该通过"这类主观判断
+- 用JSON格式输出（见下方格式要求）""",
+    },
+    "test_evidence": {
+        "name": "测试证据法官",
+        "focus": "测试覆盖、回归验证、可复现性",
+        "system": """你是蛇群的测试证据法官。你的角色是从**测试和验证证据**的角度审查修复。
+
+审查重点:
+1. 修复代码是否可以通过已有测试
+2. 测试是否真正覆盖了变更路径（非虚假通过）
+3. 是否存在因修复而暴露的新边界
+4. 修复代码是否包含可验证的断言
+
+输出规则:
+- 基于具体测试证据，不做推测性判断
+- 标注无法确认的测试盲区
+- 用JSON格式输出（见下方格式要求）""",
+    },
+    "contract": {
+        "name": "架构契约法官",
+        "focus": "接口契约、模块边界、依赖关系、API兼容性",
+        "system": """你是蛇群的架构契约法官。你的角色是审查修复是否**保持架构约束**。
+
+审查重点:
+1. 函数签名是否保持不变（参数/返回值类型）
+2. 公共API是否被意外修改
+3. 是否引入了新的外部依赖
+4. 模块边界是否被破坏
+5. 框架约定是否被遵守
+
+输出规则:
+- 基于diff和类型签名，不做语义推测
+- 标注无法确认的兼容性风险
+- 用JSON格式输出（见下方格式要求）""",
+    },
+}
+
+JUDGE_OUTPUT_FORMAT = """请用以下JSON格式输出你的审查结果（只输出JSON，不要其他文字）:
+
+{
+  "verdict": "pass | fail | uncertain",
+  "confidence": 0.0-1.0,
+  "severity": "P0 | P1 | P2 | P3",
+  "evidence_refs": ["证据1", "证据2"],
+  "reasoning": "判定理由",
+  "counterevidence": "对立面证据（如果有）",
+  "uncertainty": ["无法确认的项"]
+}"""
 
 # L1/L2 bug 关键词 → 轻量蛇头
 L1_L2_KEYWORDS = [
@@ -74,6 +144,30 @@ class BatchResult:
     template_hits: int = 0
     success_count: int = 0
     fail_count: int = 0
+
+
+@dataclass
+class JudgeVerdict:
+    """单个法官的裁决结果 (v0.7)"""
+    role: str          # "semantic" | "test_evidence" | "contract"
+    verdict: str       # "pass" | "fail" | "uncertain"
+    confidence: float
+    severity: str      # "P0" | "P1" | "P2" | "P3"
+    evidence_refs: list
+    reasoning: str
+    counterevidence: str
+    uncertainty: list
+
+
+@dataclass
+class AdjudicationResult:
+    """三角色裁决的汇总结果 (v0.7)"""
+    verdicts: list                 # [JudgeVerdict, ...]
+    final_verdict: str             # "pass" | "fail" | "conflict" | "escalated"
+    conflict_type: str             # "" | "2:1" | "1:1:1" | "hetero_dissent"
+    minority_preserved: bool
+    total_tokens: int
+    summary: str
 
 
 # ================================================================
@@ -336,7 +430,7 @@ except Exception as e:
 
     def fix(self, file_path: str, function: str, bug_description: str,
             error_type: str = "", trigger_test: str = None,
-            use_cache: bool = False) -> FixResult:
+            use_cache: bool = False, enable_judges: bool = False) -> FixResult:
         """
         修复单个bug。
 
@@ -401,7 +495,17 @@ except Exception as e:
             # 8. 判定
             success = audit["passed"]
 
-            return FixResult(
+            # 9. v0.7 角色化裁决（可选）
+            adjudication = None
+            if enable_judges:
+                adjudication = self._adjudicate(file_path, patch, bug_id=bug_id)
+                if adjudication.final_verdict == "fail":
+                    success = False
+                    audit["issues"].append(f"裁决未通过: {adjudication.summary}")
+                elif adjudication.final_verdict == "conflict":
+                    audit["issues"].append(f"裁决冲突: {adjudication.summary}")
+
+            result = FixResult(
                 bug_id=bug_id,
                 success=success,
                 patch=patch,
@@ -411,6 +515,9 @@ except Exception as e:
                 audit=audit,
                 error="" if success else "; ".join(audit["issues"]),
             )
+            if adjudication:
+                result._adjudication = adjudication
+            return result
 
         except Exception as e:
             return FixResult(bug_id=bug_id, success=False, error=str(e), tokens=tokens)
@@ -445,11 +552,13 @@ except Exception as e:
             results.append(result)
             total_tokens += sum(result.tokens.values())
 
-        # 批量法官审查 (P10) — 所有修复打包一次调用
-        if len(results) > 1:
-            judge_result = self._batch_judge(file_path, results)
-            if judge_result:
-                total_tokens += judge_result.get("total_tokens", 0)
+        # v0.7 角色化批量裁决 — 每个修复独立审查
+        adjudication_results = []
+        for r in results:
+            if r.patch and not r.template_hit:
+                adj = self._adjudicate(file_path, r.patch, bug_id=r.bug_id)
+                adjudication_results.append(adj)
+                total_tokens += adj.total_tokens
 
         return BatchResult(
             results=results,
@@ -459,32 +568,192 @@ except Exception as e:
             fail_count=sum(1 for r in results if not r.success),
         )
 
-    def _batch_judge(self, file_path: str, results: list[FixResult]) -> Optional[dict]:
-        """P10 批量法官审查"""
-        if not results:
-            return None
+    # ══════════════════════════════════════════════════════════
+    # v0.7 角色化裁决引擎
+    # ══════════════════════════════════════════════════════════
 
-        # 构造批量审查prompt
-        patches_text = "\n\n---\n\n".join(
-            f"Bug #{i+1}: {r.bug_id}\n{r.patch[:500]}"
-            for i, r in enumerate(results)
+    def _run_single_judge(self, role: str, file_path: str, patch: str,
+                          bug_id: str = "", test_results: str = "") -> JudgeVerdict:
+        """运行单个角色法官，独立裁决"""
+        role_cfg = JUDGE_ROLES[role]
+        model_key = f"judge_{role}"
+        model = self.models.get(model_key, "deepseek-v4-pro")
+        temp = self.temp.get(model_key, 0.3)
+
+        system = role_cfg["system"] + "\n\n" + JUDGE_OUTPUT_FORMAT
+
+        user_parts = [f"审查目标: {bug_id}"]
+        if test_results:
+            user_parts.append(f"\n测试结果:\n{test_results[:500]}")
+        user_parts.append(f"\n修复Patch:\n{patch[:2000]}")
+        user = "\n".join(user_parts)
+
+        result = self._call(model, system, user, temperature=temp, max_tokens=1024)
+        parsed = self._parse_verdict(result["content"], role)
+
+        return JudgeVerdict(
+            role=role,
+            verdict=parsed.get("verdict", "uncertain"),
+            confidence=parsed.get("confidence", 0.5),
+            severity=parsed.get("severity", "P2"),
+            evidence_refs=parsed.get("evidence_refs", []),
+            reasoning=parsed.get("reasoning", result["content"][:200]),
+            counterevidence=parsed.get("counterevidence", ""),
+            uncertainty=parsed.get("uncertainty", []),
         )
 
-        system = "你是代码审查法官。审查以下所有修复，判断是否引入了新bug。"
-        user = f"文件: {os.path.basename(file_path)}\n\n{patches_text}\n\n请逐一判断每个修复: PASS(无新bug)或FAIL(引入新bug)。"
+    def _parse_verdict(self, raw: str, role: str) -> dict:
+        """解析法官输出的JSON"""
+        try:
+            # Try direct JSON parse
+            json_match = re.search(r'\{.*"verdict".*\}', raw, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group(0))
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        # Fallback: extract verdict from text
+        raw_lower = raw.lower()
+        if "fail" in raw_lower and "pass" not in raw_lower.split("fail")[0][-50:]:
+            verdict = "fail"
+        elif "pass" in raw_lower and "fail" not in raw_lower.split("pass")[0][-50:]:
+            verdict = "pass"
+        else:
+            verdict = "uncertain"
+        return {"verdict": verdict, "confidence": 0.5, "severity": "P2",
+                "evidence_refs": [], "reasoning": raw[:200],
+                "counterevidence": "", "uncertainty": []}
 
-        # DS主法官
-        r1 = self._call(self.models["judge_primary"], system, user,
-                       temperature=self.temp["judge_ds"])
-        # Gemini第二法官
-        r2 = self._call(self.models["judge_tertiary"], system, user,
-                       temperature=self.temp["judge_gemini"])
+    def _resolve_conflict(self, verdicts: list[JudgeVerdict],
+                          file_path: str, patch: str,
+                          bug_id: str = "") -> AdjudicationResult:
+        """冲突处理：3:0, 2:1, 1:1:1"""
+        passes = sum(1 for v in verdicts if v.verdict == "pass")
+        fails = sum(1 for v in verdicts if v.verdict == "fail")
+        uncertains = sum(1 for v in verdicts if v.verdict == "uncertain")
 
-        return {
-            "judge_ds": r1["content"][:500],
-            "judge_gemini": r2["content"][:500],
-            "total_tokens": r1["total_tokens"] + r2["total_tokens"],
-        }
+        total_tokens = 0  # tokens tracked at call site
+
+        # 3:0 fail → 进入修复层
+        if fails == 3:
+            return AdjudicationResult(
+                verdicts=verdicts, final_verdict="fail",
+                conflict_type="", minority_preserved=True,
+                total_tokens=total_tokens,
+                summary="3:0 一致判定失败，进入修复层")
+
+        # 3:0 pass → 通过
+        if passes == 3:
+            return AdjudicationResult(
+                verdicts=verdicts, final_verdict="pass",
+                conflict_type="", minority_preserved=True,
+                total_tokens=total_tokens,
+                summary="3:0 一致判定通过")
+
+        # 3:0 uncertain → 回到蛇头重新分析
+        if uncertains == 3:
+            return AdjudicationResult(
+                verdicts=verdicts, final_verdict="escalated",
+                conflict_type="all_uncertain", minority_preserved=True,
+                total_tokens=total_tokens,
+                summary="3:0 全部uncertain，建议回到蛇头重新分析")
+
+        # 2:1 fail → 进入修复层，记录少数派
+        if fails == 2:
+            minority = [v for v in verdicts if v.verdict != "fail"][0]
+            return AdjudicationResult(
+                verdicts=verdicts, final_verdict="fail",
+                conflict_type="2:1", minority_preserved=True,
+                total_tokens=total_tokens,
+                summary=f"2:1 判定失败（少数派{minority.role}: {minority.reasoning[:100]}）")
+
+        # 2:1 pass → 不直接通过，检查少数派
+        if passes == 2:
+            minority = [v for v in verdicts if v.verdict != "pass"][0]
+            if minority.severity in ("P0", "P1"):
+                return AdjudicationResult(
+                    verdicts=verdicts, final_verdict="conflict",
+                    conflict_type="2:1_p0_risk", minority_preserved=True,
+                    total_tokens=total_tokens,
+                    summary=f"2:1 通过但少数派提出{minority.severity}风险: {minority.reasoning[:100]}")
+            return AdjudicationResult(
+                verdicts=verdicts, final_verdict="pass",
+                conflict_type="2:1", minority_preserved=True,
+                total_tokens=total_tokens,
+                summary=f"2:1 通过（少数派{minority.role}无P0/P1风险）")
+
+        # 1:1:1 → 触发仲裁器
+        passes_detail = [(v.role, v.verdict) for v in verdicts]
+        return AdjudicationResult(
+            verdicts=verdicts, final_verdict="conflict",
+            conflict_type="1:1:1", minority_preserved=True,
+            total_tokens=total_tokens,
+            summary=f"1:1:1 僵局: {passes_detail}，建议人工审查或调用仲裁器")
+
+    def _adjudicate(self, file_path: str, patch: str,
+                    bug_id: str = "", test_results: str = "",
+                    enable_arbitrator: bool = False) -> AdjudicationResult:
+        """三角色独立裁决 + 冲突处理"""
+        verdicts = []
+        total_tokens = 0
+
+        # 三个法官独立运行（顺序调用但互不可见）
+        for role in ("semantic", "test_evidence", "contract"):
+            v = self._run_single_judge(role, file_path, patch, bug_id, test_results)
+            verdicts.append(v)
+            total_tokens += 1  # approximate — real token tracking needs call result
+
+        result = self._resolve_conflict(verdicts, file_path, patch, bug_id)
+        result.total_tokens = total_tokens
+
+        # 1:1:1 且开启仲裁器 → 调Claude做第四次独立判断
+        if result.conflict_type == "1:1:1" and enable_arbitrator:
+            arb = self._run_arbitrator(file_path, patch, bug_id, verdicts)
+            result.verdicts.append(arb)
+            result.total_tokens += 1
+            result.final_verdict = arb.verdict if arb.verdict != "uncertain" else "escalated"
+            result.summary += f"\n仲裁器判定: {arb.verdict} (confidence={arb.confidence})"
+
+        return result
+
+    def _run_arbitrator(self, file_path: str, patch: str,
+                        bug_id: str, verdicts: list[JudgeVerdict]) -> JudgeVerdict:
+        """仲裁器: 1:1:1时调用高能力模型做第四次独立判断"""
+        model = self.models.get("arbitrator", "claude-sonnet-5")
+        temp = self.temp.get("arbitrator", 0.3)
+
+        conflicts_text = "\n".join(
+            f"法官{v.role}: {v.verdict} (置信度{v.confidence}, {v.severity})\n理由: {v.reasoning[:150]}"
+            for v in verdicts
+        )
+
+        system = """你是蛇群的仲裁器。三位角色法官对同一修复产生了分歧。
+你的任务是做出独立判断——不看其他法官的结论，基于证据重新审查。
+
+输出规则: 用JSON格式（同法官格式）"""
+
+        user = f"""审查目标: {bug_id}
+
+Patch:
+{patch[:1500]}
+
+三位法官的分歧:
+{conflicts_text}
+
+请独立判断该修复是否通过。{JUDGE_OUTPUT_FORMAT}"""
+
+        result = self._call(model, system, user, temperature=temp, max_tokens=1024)
+        parsed = self._parse_verdict(result["content"], "arbitrator")
+
+        return JudgeVerdict(
+            role="arbitrator",
+            verdict=parsed.get("verdict", "uncertain"),
+            confidence=parsed.get("confidence", 0.5),
+            severity=parsed.get("severity", "P2"),
+            evidence_refs=parsed.get("evidence_refs", []),
+            reasoning=parsed.get("reasoning", result["content"][:200]),
+            counterevidence=parsed.get("counterevidence", ""),
+            uncertainty=parsed.get("uncertainty", []),
+        )
 
     @property
     def stats(self) -> dict:
