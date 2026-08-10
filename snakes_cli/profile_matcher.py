@@ -11,8 +11,34 @@ API_KEY = None
 
 def _load_key():
     global API_KEY
-    with open(os.path.join(os.path.dirname(__file__), "experiments", ".tokeness_key.txt")) as f:
-        API_KEY = f.read().strip()
+    # 优先从环境变量读取
+    key = os.environ.get("SNAKES_API_KEY", "")
+    if key:
+        API_KEY = key
+        return
+    # Fallback: 读取配置文件
+    import yaml as _yaml
+    config_paths = [
+        os.environ.get("HERMES_CONFIG", ""),
+        os.path.expanduser("~/.snakes_config.json"),
+        os.path.expanduser("~/.hermes/config.yaml"),
+    ]
+    for cp in config_paths:
+        if cp and os.path.exists(cp):
+            try:
+                with open(cp, encoding="utf-8") as f:
+                    if cp.endswith(".json"):
+                        cfg = json.load(f)
+                        API_KEY = cfg.get("api_key", "")
+                    else:
+                        cfg = _yaml.safe_load(f)
+                        for p in cfg.get("custom_providers", []):
+                            if p.get("name") == "tokeness":
+                                API_KEY = p.get("api_key", "")
+                if API_KEY:
+                    return
+            except Exception:
+                continue
 
 def _llm_call(prompt: str, max_tokens: int = 512) -> str:
     payload = {"model": MODEL, "messages": [
@@ -25,8 +51,11 @@ def _llm_call(prompt: str, max_tokens: int = 512) -> str:
         return json.loads(resp.read().decode())["choices"][0]["message"]["content"]
 
 def load_system() -> dict:
-    with open(PROFILES_PATH, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    try:
+        with open(PROFILES_PATH, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except (FileNotFoundError, yaml.YAMLError) as e:
+        raise RuntimeError(f"Failed to load profiles from {PROFILES_PATH}: {e}")
 
 def lookup_tier(z_score: float, risk_coefficient: float, routing: dict) -> dict:
     """查表矩阵: Z(行) × R(列) → 蛇配置等级"""

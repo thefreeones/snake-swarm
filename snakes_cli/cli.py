@@ -179,7 +179,10 @@ def cmd_scan(args):
         print(f"  [{i+1}] {status} {r.bug_id}{hit}")
 
     print(f"\n{'='*50}")
-    print(f"  通过: {result.success_count}/{len(bugs)} ({result.success_count/len(bugs)*100:.0f}%)")
+    if len(bugs) > 0:
+        print(f"  通过: {result.success_count}/{len(bugs)} ({result.success_count/len(bugs)*100:.0f}%)")
+    else:
+        print(f"  通过: 0/0 (N/A)")
     print(f"  失败: {result.fail_count}")
     print(f"  模板: {result.template_hits}")
     print(f"  Token: {result.total_tokens}")
