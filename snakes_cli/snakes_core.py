@@ -355,6 +355,7 @@ class Snakes:
         self._file_cache = {}  # P12 文件级缓存
         self._template_hits = 0
         self.pattern_store = PatternStore()  # v0.7 学习层
+        self._validate_heterogeneity()  # 校验法官异构性
 
     # ── LLM调用 ──────────────────────────────
     def _call(self, model: str, system: str, user: str,
@@ -382,6 +383,47 @@ class Snakes:
             "completion_tokens": data["usage"]["completion_tokens"],
             "total_tokens": data["usage"]["total_tokens"],
         }
+
+    # ── 异构性校验 ─────────────────────────
+    def _validate_heterogeneity(self):
+        """校验法官配置是否满足异构性要求。
+        
+        角色化法官依赖异构认知——如果三个法官全是同一厂商模型，
+        则丧失互补性。至少需要两个不同供应商的模型。
+        """
+        import sys as _sys
+        
+        judge_models = {
+            "语义法官": self.models.get("judge_semantic", ""),
+            "测试法官": self.models.get("judge_test", ""),
+            "契约法官": self.models.get("judge_contract", ""),
+        }
+        
+        # 提取模型供应商 (取模型名的第一个-之前部分)
+        def provider(model: str) -> str:
+            m = model.lower()
+            if "deepseek" in m: return "deepseek"
+            if "gemini" in m: return "google"
+            if "claude" in m: return "anthropic"
+            if "gpt" in m or "openai" in m: return "openai"
+            return m.split("-")[0] if "-" in m else m
+        
+        providers = {provider(m) for m in judge_models.values() if m}
+        
+        if len(providers) < 2:
+            msg = (
+                "\n⚠️  异构性警告: 三角色法官使用了相同供应商的模型 "
+                f"({', '.join(providers)})\n"
+                "   这违背了蛇群的异构裁决设计原则。\n"
+                "   同供应商模型可能共享训练数据偏差和认知盲区。\n"
+                "   建议: 至少配置两个不同供应商的模型 "
+                "(如 DeepSeek + Gemini, DeepSeek + Claude)\n"
+                "   CLI: snakes config 可修改模型配置\n"
+            )
+            print(msg, file=_sys.stderr)
+            self._heterogeneity_warning = msg
+        else:
+            self._heterogeneity_warning = None
 
     # ── 复杂度判定 ─────────────────────────
     def _classify_complexity(self, bug_description: str, error_type: str = "") -> str:

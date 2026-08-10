@@ -240,6 +240,19 @@ def cmd_config(args):
     print(f"   API Key: {'已设置' if cfg.get('api_key') else '❌ 未设置'}")
     print(f"   Base URL: {cfg.get('base_url', DEFAULT_CONFIG['base_url'])}")
     print(f"   模板数: {len(FIX_TEMPLATES)}")
+    models = cfg.get("models", {})
+    if models:
+        judges = [models.get(k, "") for k in ("judge_semantic","judge_test","judge_contract")]
+        providers = set()
+        for m in judges:
+            m_l = m.lower()
+            if "deepseek" in m_l: providers.add("DeepSeek")
+            elif "gemini" in m_l: providers.add("Gemini")
+            elif "claude" in m_l: providers.add("Claude")
+            elif "gpt" in m_l or "openai" in m_l: providers.add("OpenAI")
+            else: providers.add(m)
+        status = "✅" if len(providers) >= 2 else "⚠️ 同厂商！需≥2供应商"
+        print(f"   法官异构性: {status} ({', '.join(providers)})")
 
 
 def cmd_templates(args):
