@@ -29,7 +29,7 @@ BATCH_JUDGE_GEMINI = "gemini-3.6-flash"
 
 def load_api_key():
     global API_KEY
-    config_path = os.path.expandvars(r"C:\Users\GOD\AppData\Local\hermes\config.yaml")
+    config_path = os.environ.get('HERMES_CONFIG', os.path.expanduser('~/.hermes/config.yaml'))
     with open(config_path, 'r') as f:
         content = f.read()
     for block in content.split('- name:'):

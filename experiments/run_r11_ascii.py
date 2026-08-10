@@ -17,7 +17,8 @@ import re
 # API Config
 # ============================================================
 def load_api_key():
-    with open(r'C:/Users/GOD/AppData/Local/hermes/config.yaml', 'r', encoding='utf-8') as f:
+    config_path = os.environ.get('HERMES_CONFIG', os.path.expanduser('~/.hermes/config.yaml'))
+    with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     tokeness_provider = [x for x in config['custom_providers'] if x['name'] == 'tokeness'][0]
     return tokeness_provider['api_key']

@@ -33,6 +33,8 @@ _apikey_hex.txt
 _apikey_hex.txt.bak
 .env
 *.secret
+*.key
+*.tokeness*
 
 # Hermes
 .hermes/

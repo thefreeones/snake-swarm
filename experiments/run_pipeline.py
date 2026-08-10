@@ -3,7 +3,7 @@
 import json, time, os, sys, requests
 
 # Read API key
-with open('D:/competation/design/.tokeness_key.txt') as f:
+with open('TOKENESS_KEY_FILE') as f:
     API_KEY = f.read().strip()
 
 BASE_URL = "https://n.tokeness.io/v1/chat/completions"

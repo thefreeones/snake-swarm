@@ -5,7 +5,7 @@ P3: 数据契约+传播原型验证
 import yaml, json, time, os, requests
 
 # --- Config ---
-CONFIG_PATH = r"C:\Users\GOD\AppData\Local\hermes\config.yaml"
+CONFIG_PATH = os.environ.get('HERMES_CONFIG', os.path.expanduser('~/.hermes/config.yaml'))
 with open(CONFIG_PATH, 'r') as f:
     config = yaml.safe_load(f)
 

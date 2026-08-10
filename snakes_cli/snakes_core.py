@@ -4,7 +4,7 @@
 
 用法:
     from snakes_core import Snakes
-    snakes = Snakes(api_key="sk-...", base_url="https://n.tokeness.io/v1")
+    snakes = Snakes(api_key="$TOKENESS_API_KEY", base_url="https://n.tokeness.io/v1")
     result = snakes.fix(file="slugify.py", function="smart_truncate", bug_description="...")
     print(result.patch)
 """

@@ -16,8 +16,16 @@ MODEL = "deepseek-v4-pro"
 TEMPERATURE = 0.3
 
 # Load API key from config
-with open(r'C:\Users\GOD\AppData\Local\hermes\config.yaml', 'r') as f:
-    config = yaml.safe_load(f)
+import os as _os
+_config_paths = [
+    _os.environ.get('HERMES_CONFIG'),
+    _os.path.expanduser('~/.hermes/config.yaml'),
+    _os.path.expanduser('~/AppData/Local/hermes/config.yaml'),
+]
+_config_path = next((p for p in _config_paths if p and _os.path.exists(p)), None)
+if _config_path:
+    with open(_config_path, 'r') as f:
+        config = yaml.safe_load(f)
 API_KEY = None
 for p in config.get('custom_providers', []):
     if p['name'] == 'tokeness':

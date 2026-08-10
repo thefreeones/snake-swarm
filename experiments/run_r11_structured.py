@@ -16,7 +16,7 @@ import json, time, os, sys, requests
 # API配置
 # ============================================================
 import yaml
-with open(r'C:/Users/GOD/AppData/Local/hermes/config.yaml') as f:
+with open(os.environ.get('HERMES_CONFIG', os.path.expanduser('~/.hermes/config.yaml'))) as f:
     config = yaml.safe_load(f)
 tokeness_provider = [x for x in config['custom_providers'] if x['name'] == 'tokeness'][0]
 API_KEY = tokeness_provider['api_key']

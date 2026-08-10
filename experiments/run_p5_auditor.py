@@ -27,7 +27,8 @@ def load_api_key():
             hex_key = f.read().strip()
         return bytes.fromhex(hex_key).decode('utf-8')
     # Fallback: read from config
-    with open(r'C:/Users/GOD/AppData/Local/hermes/config.yaml', 'r', encoding='utf-8') as f:
+    config_path = os.environ.get('HERMES_CONFIG', os.path.expanduser('~/.hermes/config.yaml'))
+    with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     for p in config.get('custom_providers', []):
         if p.get('name') == 'tokeness':

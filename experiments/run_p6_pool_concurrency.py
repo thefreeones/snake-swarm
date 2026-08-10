@@ -109,7 +109,7 @@ def load_api_key():
         os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~/.local/share")), 
                      "hermes", "config.yaml"),
         os.path.expanduser("~/AppData/Local/hermes/config.yaml"),
-        "/c/Users/GOD/AppData/Local/hermes/config.yaml",
+        os.path.expanduser("~/.hermes/config.yaml"),
     ]
     
     for p in config_paths:
