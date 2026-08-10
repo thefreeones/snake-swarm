@@ -112,6 +112,15 @@ def cmd_fix(args):
                 print(f"   🔴 {vi}")
 
 
+    # v0.7 学习层: 新提取的模式
+    if hasattr(result, '_new_pattern'):
+        p = result._new_pattern
+        print(f"\n🧠 学习层: 新提取模式 [{p.pattern_id}]")
+        print(f"   触发: {p.trigger_condition[:80]}")
+        print(f"   教训: {p.lesson[:80]}")
+        print(f"   策略: {p.fix_strategy[:80]}")
+
+
     if result.audit:
         print(f"\n🔍 审计: {'PASS' if result.audit['passed'] else 'FAIL'}")
         if result.audit["issues"]:
@@ -231,13 +240,26 @@ def cmd_config(args):
 
 
 def cmd_templates(args):
-    """列出可用模板"""
+    """列出可用模板+学习模式"""
     print("修复模板缓存 (P13):")
     for tid, tpl in FIX_TEMPLATES.items():
         print(f"  [{tid}] {tpl['name']}")
         print(f"       检测: {', '.join(tpl['detect'][:3])}")
         print(f"       修复: {tpl['fix'][:60]}...")
         print()
+
+    # v0.7 学习层模式
+    from snakes_core import PatternStore
+    ps = PatternStore()
+    stats = ps.get_stats()
+    if stats["total"] > 0:
+        print(f"学习层模式库: {stats['total']}条 "
+              f"(active={stats['active']}, candidate={stats['candidate']}, "
+              f"deprecated={stats['deprecated']})")
+        active = [p for p in ps.patterns.values() if p.status == "active"]
+        for p in active[:5]:
+            print(f"  [{p.pattern_id}] {p.trigger_condition[:60]}")
+            print(f"       → {p.lesson[:60]} (置信度{p.confidence:.2f})")
 
 
 def main():

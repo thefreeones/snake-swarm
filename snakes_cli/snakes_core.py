@@ -175,11 +175,109 @@ class AdjudicationResult:
 @dataclass
 class TailReport:
     """蛇尾结构化自述 (v0.7)"""
-    fact: dict        # 系统自动填充: modified_files, diff_lines, test_passed, test_total
-    inference: dict   # 模型生成+证据: impact_scope, risk_assessment, edge_cases_covered
-    uncertainty: list # 强制列出无法确认项
-    validated: bool   # claims vs system records 一致性校验结果
-    validation_issues: list  # 校验发现的不一致
+    fact: dict
+    inference: dict
+    uncertainty: list
+    validated: bool
+    validation_issues: list
+
+
+@dataclass
+class PatternEntry:
+    """学习层模式条目 (v0.7)"""
+    pattern_id: str
+    source_tasks: list     # ["bug-185", "P8"]
+    domain: list           # ["python", "string-normalization"]
+    trigger_condition: str # "当函数处理unicode输入且依赖第三方slug库时"
+    lesson: str            # "优先检查大小写、分隔符、unicode转换和空字符串边界"
+    fix_strategy: str      # 具体的修复策略
+    evidence: list         # ["测试通过", "修复diff与maintainer一致"]
+    success_count: int = 0
+    failure_count: int = 0
+    confidence: float = 0.5
+    last_used_at: str = ""
+    status: str = "candidate"  # candidate | active | deprecated | archived
+
+    def record_success(self):
+        self.success_count += 1
+        self.confidence = min(0.95, self.confidence + 0.1)
+        if self.success_count >= 3 and self.status == "candidate":
+            self.status = "active"
+
+    def record_failure(self):
+        self.failure_count += 1
+        self.confidence = max(0.1, self.confidence - 0.2)
+        if self.failure_count >= 2 and self.status == "active":
+            self.status = "deprecated"
+
+
+# ================================================================
+# v0.7 学习层 — 模式持久化
+# ================================================================
+import os as _os_module
+
+DEFAULT_PATTERNS_PATH = _os_module.path.join(
+    _os_module.path.dirname(__file__), "patterns.json")
+
+
+class PatternStore:
+    """模式经验库: 持久化 + 检索 + 评分 + 淘汰"""
+
+    def __init__(self, path: str = None):
+        self.path = path or DEFAULT_PATTERNS_PATH
+        self.patterns: dict[str, PatternEntry] = {}
+        self._load()
+
+    def _load(self):
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                data = json.load(f)
+            for pid, entry in data.items():
+                self.patterns[pid] = PatternEntry(**entry)
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+
+    def save(self):
+        data = {pid: {k: v for k, v in vars(p).items()}
+                for pid, p in self.patterns.items()}
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+    def add(self, pattern: PatternEntry):
+        self.patterns[pattern.pattern_id] = pattern
+        self.save()
+
+    def retrieve(self, bug_desc: str, error_type: str = "",
+                 limit: int = 3) -> list[PatternEntry]:
+        """关键词匹配检索Top-K条高置信度模式"""
+        query = (bug_desc + " " + error_type).lower()
+        scored = []
+        for p in self.patterns.values():
+            if p.status in ("deprecated", "archived"):
+                continue
+            # 关键词匹配打分
+            keywords = (p.trigger_condition + " " + p.lesson).lower()
+            score = sum(1 for word in query.split()
+                       if len(word) > 2 and word in keywords)
+            # 置信度加权
+            score *= p.confidence
+            if score > 0:
+                scored.append((score, p))
+        scored.sort(key=lambda x: -x[0])
+        return [p for _, p in scored[:limit]]
+
+    def get_active_count(self) -> int:
+        return sum(1 for p in self.patterns.values()
+                   if p.status == "active")
+
+    def get_stats(self) -> dict:
+        return {
+            "total": len(self.patterns),
+            "candidate": sum(1 for p in self.patterns.values() if p.status == "candidate"),
+            "active": sum(1 for p in self.patterns.values() if p.status == "active"),
+            "deprecated": sum(1 for p in self.patterns.values() if p.status == "deprecated"),
+        }
 
 
 # ================================================================
@@ -233,6 +331,7 @@ class Snakes:
         self.temp = {**DEFAULT_TEMPERATURE, **(temperature or {})}
         self._file_cache = {}  # P12 文件级缓存
         self._template_hits = 0
+        self.pattern_store = PatternStore()  # v0.7 学习层
 
     # ── LLM调用 ──────────────────────────────
     def _call(self, model: str, system: str, user: str,
@@ -291,7 +390,8 @@ class Snakes:
 
     # ── P11 分层蛇头 ───────────────────────
     def _run_head(self, file_path: str, function: str, bug_desc: str,
-                  error_type: str = "", use_cache: bool = False) -> dict:
+                  error_type: str = "", use_cache: bool = False,
+                  injected_knowledge: str = "") -> dict:
         """跑蛇头分析"""
         complexity = self._classify_complexity(bug_desc, error_type)
         model = self.models["light_head"] if complexity == "light" else self.models["heavy_head"]
@@ -319,7 +419,7 @@ class Snakes:
 
 Bug描述: {bug_desc}
 目标函数: {function}
-
+{injected_knowledge}
 请分析:
 1. 根因(为什么这个bug会发生?)
 2. 受影响的代码行
@@ -638,6 +738,87 @@ Diff行数变化: {diff_lines}
         )
 
     # ══════════════════════════════════════════════════════════
+    # v0.7 学习层 — 模式提取、检索、注入、反馈
+    # ══════════════════════════════════════════════════════════
+
+    def _extract_learning_pattern(self, bug_id: str, bug_desc: str,
+                                  function: str, head_analysis: str,
+                                  fix_desc: str, success: bool) -> Optional[PatternEntry]:
+        """从成功修复中提取学习模式"""
+        if not success:
+            return None
+
+        system = """你是蛇群的学习模块。从成功的修复中提取可复用的模式。
+
+输出格式(JSON):
+{
+  "trigger_condition": "触发该模式的条件(一条简洁描述)",
+  "lesson": "核心教训:哪里容易错,应该怎么做",
+  "fix_strategy": "具体的修复策略",
+  "domain": ["语言/框架", "问题类型"],
+  "evidence": ["验证通过的证据"]
+}
+
+要求:
+- trigger_condition 不超过30字
+- lesson 不超过50字
+- 宁可保守不提取,不提取不成熟的模式"""
+
+        user = f"""Bug: {bug_desc}
+函数: {function}
+蛇头分析: {head_analysis[:500]}
+修复方案: {fix_desc[:500]}
+
+请提取可复用的修复模式。"""
+
+        try:
+            result = self._call(
+                self.models.get("light_head", "deepseek-v4-pro"),
+                system, user, temperature=0.2, max_tokens=600)
+            match = re.search(r'\{.*\}', result["content"], re.DOTALL)
+            if match:
+                parsed = json.loads(match.group(0))
+                pid = f"pattern_{len(self.pattern_store.patterns)+1:04d}"
+                return PatternEntry(
+                    pattern_id=pid,
+                    source_tasks=[bug_id],
+                    domain=parsed.get("domain", ["python", "bug-fix"]),
+                    trigger_condition=parsed.get("trigger_condition", bug_desc[:50]),
+                    lesson=parsed.get("lesson", fix_desc[:100]),
+                    fix_strategy=parsed.get("fix_strategy", fix_desc[:100]),
+                    evidence=parsed.get("evidence", ["修复通过审计"]),
+                )
+        except Exception:
+            pass
+        return None
+
+    def _inject_patterns(self, bug_desc: str, error_type: str = "",
+                         limit: int = 3) -> str:
+        """检索相关模式,生成注入prompt"""
+        patterns = self.pattern_store.retrieve(bug_desc, error_type, limit)
+        if not patterns:
+            return ""
+
+        lines = ["\n## 历史经验(仅供怀疑,不作为结论)\n"]
+        for p in patterns:
+            lines.append(
+                f"- [{p.status}] {p.trigger_condition} → {p.lesson} "
+                f"(置信度{p.confidence:.2f}, 成功{p.success_count}次)")
+            p.last_used_at = time.strftime("%Y-%m-%d %H:%M")
+        return "\n".join(lines)
+
+    def _feedback_patterns(self, bug_desc: str, error_type: str,
+                           success: bool):
+        """修复完成后反馈:更新已注入模式的统计数据"""
+        used_patterns = self.pattern_store.retrieve(bug_desc, error_type, limit=5)
+        for p in used_patterns:
+            if success:
+                p.record_success()
+            else:
+                p.record_failure()
+        self.pattern_store.save()
+
+    # ══════════════════════════════════════════════════════════
     # 公共API
     # ══════════════════════════════════════════════════════════
 
@@ -674,9 +855,13 @@ Diff行数变化: {diff_lines}
                     error="模板命中但需LLM生成具体代码——模板提供指导方向",
                 )
 
-            # 2. 蛇头分析 (P11+P12)
+            # 2. v0.7 学习层: 检索相关模式注入蛇头
+            injected = self._inject_patterns(bug_description, error_type)
+
+            # 3. 蛇头分析 (P11+P12)
             head = self._run_head(file_path, function, bug_description,
-                                  error_type, use_cache)
+                                  error_type, use_cache,
+                                  injected_knowledge=injected)
             tokens["head"] = head["total_tokens"]
 
             # 3. 修复蛇
@@ -757,6 +942,17 @@ Diff行数变化: {diff_lines}
             )
             if adjudication:
                 result._adjudication = adjudication
+
+            # 12. v0.7 学习层: 提取模式 + 反馈更新
+            if success and not template:
+                pattern = self._extract_learning_pattern(
+                    bug_id, bug_description, function,
+                    head["content"], fix["content"][:300], True)
+                if pattern:
+                    self.pattern_store.add(pattern)
+                    result._new_pattern = pattern
+            self._feedback_patterns(bug_description, error_type, success)
+
             return result
 
         except Exception as e:
