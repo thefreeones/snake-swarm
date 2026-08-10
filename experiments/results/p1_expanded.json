@@ -1,0 +1,495 @@
+{
+  "experiment": "蛇群P1扩展实验 — C1 vs C2 全量对比",
+  "date": "2026-08-04T14:50:21.146554",
+  "config": {
+    "C1": "P0基线：DS-lo(t=0.3) + DS-hi(t=0.7) + Gemini(t=0.3)，三法官异构多数投票+深挖",
+    "C2": "C2实验：Claude-Sonnet-5(t=0.3) + DeepSeek-V4-Pro(t=0.7) + Gemini-3.6-Flash(t=0.3)，三法官异构多数投票+深挖",
+    "api": "Tokeness (https://n.tokeness.io/v1)",
+    "judge_standard": "仅功能性缺陷（错误输出/崩溃/数据损坏）判FAIL，代码风格判PASS"
+  },
+  "special_notes": {
+    "S2_plugin": "S2注入了推理增强插件报告：测试输入[1e10+1,1e10+2,1e10+3]→被测0.0 vs 参考0.667，揭示灾难性抵消"
+  },
+  "comparison": [
+    {
+      "case": "case2",
+      "title": "safe_divide 类型校验缺失",
+      "z_score": 2,
+      "ground_truth": "FAIL",
+      "c1_verdict": "PASS",
+      "c2_verdict": "FAIL",
+      "c1_correct": false,
+      "c2_correct": true,
+      "c1_votes": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "c2_votes": [
+        "FAIL",
+        "FAIL",
+        "FAIL"
+      ],
+      "c1_tokens": 5145,
+      "c2_tokens": 11257,
+      "divergence": "结论分歧: C1→PASS vs C2→FAIL",
+      "c1_judges": [
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-lo",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "tokens": 806
+        },
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-hi",
+          "temperature": 0.7,
+          "verdict": "PASS",
+          "tokens": 714
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "label": "Gemini",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "tokens": 3625
+        }
+      ],
+      "c2_judges": [
+        {
+          "model": "claude-sonnet-5",
+          "label": "Claude",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 2672
+        },
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-hi",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "tokens": 4207
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "label": "Gemini",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 4378
+        }
+      ],
+      "c1_deep_dive": null,
+      "c2_deep_dive": null
+    },
+    {
+      "case": "case8",
+      "title": "get_user_info KeyError",
+      "z_score": 2,
+      "ground_truth": "FAIL",
+      "c1_verdict": "PASS",
+      "c2_verdict": "FAIL",
+      "c1_correct": false,
+      "c2_correct": true,
+      "c1_votes": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "c2_votes": [
+        "FAIL",
+        "FAIL",
+        "FAIL"
+      ],
+      "c1_tokens": 3700,
+      "c2_tokens": 5675,
+      "divergence": "结论分歧: C1→PASS vs C2→FAIL",
+      "c1_judges": [
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-lo",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "tokens": 679
+        },
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-hi",
+          "temperature": 0.7,
+          "verdict": "PASS",
+          "tokens": 690
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "label": "Gemini",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "tokens": 2331
+        }
+      ],
+      "c2_judges": [
+        {
+          "model": "claude-sonnet-5",
+          "label": "Claude",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 1364
+        },
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-hi",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "tokens": 1382
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "label": "Gemini",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 2929
+        }
+      ],
+      "c1_deep_dive": null,
+      "c2_deep_dive": null
+    },
+    {
+      "case": "S2",
+      "title": "compute_variance 灾难性抵消",
+      "z_score": 8,
+      "ground_truth": "FAIL",
+      "c1_verdict": "FAIL",
+      "c2_verdict": "FAIL",
+      "c1_correct": true,
+      "c2_correct": true,
+      "c1_votes": [
+        "PASS",
+        "FAIL",
+        "FAIL"
+      ],
+      "c2_votes": [
+        "FAIL",
+        "FAIL",
+        "FAIL"
+      ],
+      "c1_tokens": 5928,
+      "c2_tokens": 5796,
+      "divergence": "结论一致(FAIL)但投票模式不同: C1=['PASS', 'FAIL', 'FAIL'] vs C2=['FAIL', 'FAIL', 'FAIL']",
+      "c1_judges": [
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-lo",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "tokens": 1633
+        },
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-hi",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "tokens": 948
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "label": "Gemini",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 2396
+        }
+      ],
+      "c2_judges": [
+        {
+          "model": "claude-sonnet-5",
+          "label": "Claude",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 2286
+        },
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-hi",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "tokens": 1223
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "label": "Gemini",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 2287
+        }
+      ],
+      "c1_deep_dive": {
+        "valid": false,
+        "tokens": 951
+      },
+      "c2_deep_dive": null
+    },
+    {
+      "case": "S6",
+      "title": "浅拷贝陷阱 / duplicate_list",
+      "z_score": 6,
+      "ground_truth": "FAIL",
+      "c1_verdict": "PASS",
+      "c2_verdict": "FAIL",
+      "c1_correct": false,
+      "c2_correct": true,
+      "c1_votes": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "c2_votes": [
+        "FAIL",
+        "FAIL",
+        "FAIL"
+      ],
+      "c1_tokens": 3761,
+      "c2_tokens": 3422,
+      "divergence": "结论分歧: C1→PASS vs C2→FAIL",
+      "c1_judges": [
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-lo",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "tokens": 1134
+        },
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-hi",
+          "temperature": 0.7,
+          "verdict": "PASS",
+          "tokens": 1042
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "label": "Gemini",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "tokens": 1585
+        }
+      ],
+      "c2_judges": [
+        {
+          "model": "claude-sonnet-5",
+          "label": "Claude",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 1247
+        },
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-hi",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "tokens": 972
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "label": "Gemini",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 1203
+        }
+      ],
+      "c1_deep_dive": null,
+      "c2_deep_dive": null
+    },
+    {
+      "case": "case10",
+      "title": "SQL注入",
+      "z_score": 7,
+      "ground_truth": "FAIL",
+      "c1_verdict": "FAIL",
+      "c2_verdict": "FAIL",
+      "c1_correct": true,
+      "c2_correct": true,
+      "c1_votes": [
+        "FAIL",
+        "FAIL",
+        "FAIL"
+      ],
+      "c2_votes": [
+        "FAIL",
+        "FAIL",
+        "FAIL"
+      ],
+      "c1_tokens": 6683,
+      "c2_tokens": 6330,
+      "divergence": "无分歧：双方投票一致 ['FAIL', 'FAIL', 'FAIL']",
+      "c1_judges": [
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-lo",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 1740
+        },
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-hi",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "tokens": 1740
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "label": "Gemini",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 3203
+        }
+      ],
+      "c2_judges": [
+        {
+          "model": "claude-sonnet-5",
+          "label": "Claude",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 2305
+        },
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-hi",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "tokens": 1592
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "label": "Gemini",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 2433
+        }
+      ],
+      "c1_deep_dive": null,
+      "c2_deep_dive": null
+    },
+    {
+      "case": "S3",
+      "title": "代码质量问题 / process_orders",
+      "z_score": 3,
+      "ground_truth": "PASS",
+      "c1_verdict": "FAIL",
+      "c2_verdict": "FAIL",
+      "c1_correct": false,
+      "c2_correct": false,
+      "c1_votes": [
+        "PASS",
+        "PASS",
+        "FAIL"
+      ],
+      "c2_votes": [
+        "PASS",
+        "FAIL",
+        "FAIL"
+      ],
+      "c1_tokens": 7442,
+      "c2_tokens": 8549,
+      "divergence": "结论一致(FAIL)但投票模式不同: C1=['PASS', 'PASS', 'FAIL'] vs C2=['PASS', 'FAIL', 'FAIL']",
+      "c1_judges": [
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-lo",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "tokens": 1715
+        },
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-hi",
+          "temperature": 0.7,
+          "verdict": "PASS",
+          "tokens": 1715
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "label": "Gemini",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 2409
+        }
+      ],
+      "c2_judges": [
+        {
+          "model": "claude-sonnet-5",
+          "label": "Claude",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "tokens": 1725
+        },
+        {
+          "model": "deepseek-v4-pro",
+          "label": "DS-hi",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "tokens": 2146
+        },
+        {
+          "model": "gemini-3.6-flash",
+          "label": "Gemini",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "tokens": 4678
+        }
+      ],
+      "c1_deep_dive": {
+        "valid": true,
+        "tokens": 1603
+      },
+      "c2_deep_dive": null
+    }
+  ],
+  "summary": {
+    "total_cases": 6,
+    "C1_detection_rate": "2/6 = 33%",
+    "C2_detection_rate": "5/6 = 83%",
+    "C1_total_tokens": 32659,
+    "C2_total_tokens": 41029,
+    "token_overhead": "+8370 tokens (26%)",
+    "verdict_divergence_count": 3,
+    "verdict_convergence_count": 3,
+    "c2_better_than_c1": 3,
+    "c1_better_than_c2": 0,
+    "both_correct": 2,
+    "both_wrong": 1
+  },
+  "per_case_analysis": {
+    "case2": {
+      "type": "C2突破检出",
+      "detail": "C1三法官全PASS漏检→C2三法官全FAIL命中。C2的Claude和DS-hi均识别出safe_divide缺少类型校验（字符串/None输入导致TypeError）"
+    },
+    "case8": {
+      "type": "C2突破检出",
+      "detail": "C1三法官全PASS漏检→C2三法官全FAIL命中。C2识别出get_user_info在user缺少name/email键时会KeyError"
+    },
+    "S2": {
+      "type": "双方一致检出",
+      "detail": "C1(2:1 FAIL+深挖INVALID)和C2(3:0全票FAIL)均正确检出。插件报告增强了判断依据。C2全票一致，C1有1票PASS但深挖纠正"
+    },
+    "S6": {
+      "type": "C2突破检出",
+      "detail": "C1三法官全PASS漏检→C2三法官全FAIL命中。C2识别出duplicate_list使用[lst]*2是浅拷贝，修改子列表会相互影响"
+    },
+    "case10": {
+      "type": "双方一致检出",
+      "detail": "C1和C2均全票FAIL正确检出SQL注入。C2的Claude法官给出了更详细的注入攻击向量分析"
+    },
+    "S3": {
+      "type": "双方一致误判",
+      "detail": "C1(2:1 PASS→深挖VALID→FAIL)和C2(2:1 FAIL→多数派FAIL)均误判为FAIL。S3功能正确但代码质量差，两组合都未能区分功能性缺陷与代码质量问题。这是多法官系统的系统性盲点"
+    }
+  },
+  "key_findings": [
+    "C2检出率83% vs C1检出率33%，提升3个用例（+50个百分点）",
+    "C2在case2、case8、S6三个C1全票PASS漏检的用例上实现全票FAIL突破检出，证明Claude法官对类型/边界缺陷的敏感性显著优于DS",
+    "分歧模式：3/6用例结论分歧（case2、case8、S6），全部为C2正确而C1错误，无反向分歧",
+    "S3代码质量案例是双方共同盲点——功能性vs非功能性判别的边界模糊问题在多法官系统中未能解决",
+    "成本：C2总41029tokens vs C1总32659tokens，额外成本+8370tokens(26%)，平均每用例+1395tokens",
+    "S2插件报告增强了法官判断——C2三法官全票FAIL且无深挖需求，vs C1有1票PASS需深挖纠正"
+  ]
+}

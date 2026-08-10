@@ -1,0 +1,14 @@
+{
+  "students": [
+    {"name": "张三", "scores": {"math": 88, "eng": 92, "cs": 95}},
+    {"name": "李四", "scores": {"math": 72, "eng": 85, "cs": 78}},
+    {"name": "王五", "scores": {"math": 95, "eng": 88, "cs": 91}},
+    {"name": "赵六", "scores": {"math": 45, "eng": 60, "cs": 55}},
+    {"name": "孙七", "scores": {"math": -5, "eng": 80, "cs": 70}},
+    {"name": "周八", "scores": {"math": 82, "eng": null, "cs": 88}},
+    {"name": "吴九", "scores": {"math": 78, "eng": 90, "cs": 85}},
+    {"name": "郑十", "scores": {"math": 999, "eng": 75, "cs": 80}},
+    {"name": "钱十一", "scores": {"math": 90, "eng": 95, "cs": 92}},
+    {"name": "陈十二", "scores": {"math": 68, "eng": 72, "cs": 65}}
+  ]
+}

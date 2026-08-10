@@ -1,0 +1,125 @@
+[
+  {
+    "case": "S4",
+    "error_type": "L3: snake head conflict",
+    "config": "v0.3-hetero",
+    "votes": [
+      "FAIL",
+      "FAIL",
+      "FAIL"
+    ],
+    "fail_count": 3,
+    "final_verdict": "FAIL",
+    "ground_truth": "PASS",
+    "correct": false,
+    "total_tokens": 6935,
+    "total_latency": 59.9,
+    "deep_dive": null,
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.3,
+        "verdict": "FAIL",
+        "tokens": 1685,
+        "latency": 25.9
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.7,
+        "verdict": "FAIL",
+        "tokens": 1610,
+        "latency": 25.0
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "temp": 0.3,
+        "verdict": "FAIL",
+        "tokens": 3640,
+        "latency": 9.1
+      }
+    ]
+  },
+  {
+    "case": "S6",
+    "error_type": "L3: regression / shallow copy",
+    "config": "v0.3-hetero",
+    "votes": [
+      "PASS",
+      "PASS",
+      "PASS"
+    ],
+    "fail_count": 0,
+    "final_verdict": "PASS",
+    "ground_truth": "FAIL",
+    "correct": false,
+    "total_tokens": 3761,
+    "total_latency": 43.4,
+    "deep_dive": null,
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.3,
+        "verdict": "PASS",
+        "tokens": 1134,
+        "latency": 20.8
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.7,
+        "verdict": "PASS",
+        "tokens": 1042,
+        "latency": 16.9
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "temp": 0.3,
+        "verdict": "PASS",
+        "tokens": 1585,
+        "latency": 5.7
+      }
+    ]
+  },
+  {
+    "case": "S7",
+    "error_type": "L2: interface / strict repair",
+    "config": "v0.3-hetero",
+    "votes": [
+      "PASS",
+      "PASS",
+      "FAIL"
+    ],
+    "fail_count": 1,
+    "final_verdict": "FAIL",
+    "ground_truth": "FAIL",
+    "correct": true,
+    "total_tokens": 5356,
+    "total_latency": 43.5,
+    "deep_dive": {
+      "valid": true,
+      "tokens": 1432
+    },
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.3,
+        "verdict": "PASS",
+        "tokens": 388,
+        "latency": 6.8
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.7,
+        "verdict": "PASS",
+        "tokens": 458,
+        "latency": 8.0
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "temp": 0.3,
+        "verdict": "FAIL",
+        "tokens": 3078,
+        "latency": 9.8
+      }
+    ]
+  }
+]

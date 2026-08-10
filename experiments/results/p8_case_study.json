@@ -1,0 +1,117 @@
+{
+  "case_study_metadata": {
+    "library": "python-slugify",
+    "library_version": "8.0.4 (buggy baseline)",
+    "library_size": "5 Python source files (~250 lines total)",
+    "pipeline": "蛇群(Snake Swarm) v0.4b — 全链路闭环",
+    "models": {
+      "蛇头(Snake Head)": "claude-sonnet-5 (temperature=0, 分析+规划)",
+      "修复蛇(Fix Snake)": "deepseek-v4-pro (temperature=0.3, 代码修复)",
+      "重写蛇(Rewrite Snake)": "gemini-3.6-flash (temperature=0.3, 降级重写)",
+      "确定性审计者": "L1/L2零token规则引擎 (L3 LLM仅高风险触发)"
+    },
+    "api_provider": "tokeness (https://n.tokeness.io/v1)",
+    "date": "2026-08-05"
+  },
+  "bugs": [
+    {
+      "bug_id": "bug-185-max-length",
+      "title": "smart_truncate: 负值max_length导致意外截断",
+      "error_type": "逻辑错误(条件判断)",
+      "root_cause": "`if not max_length:`使用Python真值判断，`not -1`=False导致负数进入截断逻辑",
+      "trigger": "smart_truncate('hello-world', max_length=-1)",
+      "expected": "'hello-world'（不截断）",
+      "buggy_output": "'hello-worl'（被截断到11字符）",
+      "snake_swarm_fix": "✅ PASS (fix_snake, 一轮通过)",
+      "snake_swarm_solution": "将`if not max_length:`改为`if max_length <= 0:`",
+      "maintainer_solution": "将`if not max_length:`改为`if max_length <= 0:`",
+      "match_with_maintainer": "✅ 完全一致",
+      "pr": "https://github.com/un33k/python-slugify/pull/185"
+    },
+    {
+      "bug_id": "bug-186-empty-separator",
+      "title": "smart_truncate: 空分隔符+word_boundary导致ValueError崩溃",
+      "error_type": "边界条件缺失",
+      "root_cause": "`''.split('')`引发ValueError，但空分隔符未被特殊处理",
+      "trigger": "smart_truncate('helloworld', max_length=5, word_boundary=True, separator='')",
+      "expected": "无异常（硬截断到'hello'）",
+      "buggy_output": "ValueError: empty separator",
+      "snake_swarm_fix": "✅ PASS (fix_snake, 一轮通过)",
+      "snake_swarm_solution": "将`if not word_boundary:`改为`if not word_boundary or not separator:`",
+      "maintainer_solution": "将`if not word_boundary:`改为`if not word_boundary or not separator:`",
+      "match_with_maintainer": "✅ 完全一致",
+      "pr": "https://github.com/un33k/python-slugify/pull/186"
+    },
+    {
+      "bug_id": "bug-178-malformed-entities",
+      "title": "slugify: 畸形数字实体导致有效实体全部丢失",
+      "error_type": "异常处理过宽(ValueError传播)",
+      "root_cause": "broad `except Exception`包围整个`re.sub()`，一个无效实体导致所有实体转换被丢弃",
+      "trigger": "slugify('&#381; &#99999999;', decimal=True)",
+      "expected": "'z-99999999'（有效实体Ž→z，无效实体保留原文）",
+      "buggy_output": "'381-99999999'（所有实体转换都被跳过）",
+      "snake_swarm_fix": "✅ PASS (fix_snake, 一轮通过)",
+      "snake_swarm_solution": "将try/except改为per-match的异常处理辅助函数",
+      "maintainer_solution": "将try/except改为per-match的_char_from_decimal_codepoint辅助函数",
+      "match_with_maintainer": "✅ 功能等价（实现细节略有不同但效果一致）",
+      "pr": "https://github.com/un33k/python-slugify/pull/178"
+    },
+    {
+      "bug_id": "bug-179-self-referential",
+      "title": "slugify: 自引用替换被应用两次导致结果膨胀",
+      "error_type": "逻辑错误(重复处理)",
+      "root_cause": "replacements在预处理(第110行)和后处理(第187行)各应用一次，自引用规则被加倍",
+      "trigger": "slugify('a', replacements=[['a', 'aa']])",
+      "expected": "'aa'（仅应用一次替换）",
+      "buggy_output": "'aaaa'（应用两次: a→aa→aaaa）",
+      "snake_swarm_fix": "✅ PASS (fix_snake, 一轮通过)",
+      "snake_swarm_solution": "在后处理阶段检查old in new，跳过自引用规则",
+      "maintainer_solution": "在后处理阶段检查old in new，跳过自引用规则",
+      "match_with_maintainer": "✅ 功能等价",
+      "pr": "https://github.com/un33k/python-slugify/pull/179"
+    },
+    {
+      "bug_id": "bug-148-uppercase-return",
+      "title": "add_uppercase_char: return误缩进在for循环内",
+      "error_type": "缩进错误(控制流)",
+      "root_cause": "`return char_list`缩进在for循环内部，导致函数只处理第一个字符就返回",
+      "trigger": "检查PRE_TRANSLATIONS中是否包含Ü→Ue, Ö→Oe, Ä→Ae",
+      "expected": "PRE_TRANSLATIONS包含所有三个德语大写条目",
+      "buggy_output": "仅包含Ä→Ae（第一个字符ä的大写），缺失Ü→Ue和Ö→Oe",
+      "snake_swarm_fix": "✅ PASS（缩进修正，手动验证）",
+      "snake_swarm_solution": "将return char_list向左缩进一级到for循环外",
+      "maintainer_solution": "将return char_list向左缩进一级到for循环外",
+      "match_with_maintainer": "✅ 完全一致（但需注意：此bug不影响slugify()输出，slugify不直接使用PRE_TRANSLATIONS）",
+      "note": "边界情况：bug存在于数据结构而非用户可见行为，自动化测试需要检查PRE_TRANSLATIONS常量而非slugify()输出",
+      "pr": "https://github.com/un33k/python-slugify/pull/148"
+    }
+  ],
+  "analysis": {
+    "overall_success_rate": "5/5 (100%) — 所有bug均被正确修复",
+    "one_round_fix_rate": "4/5 (80%) — 4个bug由修复蛇一轮修复",
+    "maintainer_agreement": "5/5 (100%) — 所有修复方案与维护者一致或功能等价",
+    "new_bug_introduction": "0/5 (0%) — 无回归问题",
+    "rewrite_snake_usage": "0 effective uses（仅在bug #148因测试设计问题触发，实际修复蛇方案已正确）",
+    "token_efficiency": {
+      "total_llm_tokens": "~42,000",
+      "avg_per_bug": "~8,400 tokens",
+      "deterministic_auditor_savings": "L1/L2零token验证节省约12,000 tokens vs全LLM审计"
+    },
+    "error_type_coverage": {
+      "逻辑错误(条件判断)": "bug-185-max-length",
+      "边界条件缺失": "bug-186-empty-separator",
+      "异常处理过宽": "bug-178-malformed-entities",
+      "逻辑错误(重复处理)": "bug-179-self-referential",
+      "缩进错误(控制流)": "bug-148-uppercase-return"
+    },
+    "key_findings": [
+      "蛇群全链路闭环在真实代码库(python-slugify v8.0.4)中验证有效",
+      "蛇头(Claude Sonnet 5)的根因分析精准，所有5个bug的根因分析正确",
+      "修复蛇(DeepSeek V4 Pro, t=0.3)在一次尝试中修复了4/5个bug(80%)",
+      "第5个bug(#148)修复方案正确但自动化测试设计需改进(需检查数据结构而非函数输出)",
+      "确定性审计者(L1/L2零token规则引擎)在4个bug上正确验证，节省约12,000 tokens",
+      "蛇群方案与维护者实际采用的修复方案100%一致或功能等价",
+      "未观察到新bug引入（回归测试0失败）"
+    ]
+  }
+}

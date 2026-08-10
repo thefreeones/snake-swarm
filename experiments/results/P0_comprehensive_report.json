@@ -1,0 +1,271 @@
+{
+  "metadata": {
+    "date": "2026-08-04",
+    "platform": "Hermes Agent + Tokeness API",
+    "models": [
+      "DeepSeek V4 Pro",
+      "Gemini 3.6 Flash",
+      "Claude Sonnet 5"
+    ]
+  },
+  "statistics": {
+    "pretest_single": {
+      "name": "P0-前置A/B 单法官 (DeepSeek)",
+      "total": 6,
+      "correct": 0,
+      "rate": "0/6 = 0%",
+      "tokens": 4931,
+      "avg_tokens": 821
+    },
+    "pretest_same": {
+      "name": "P0-前置A/B 同模型三法官 (3x DeepSeek)",
+      "total": 6,
+      "correct": 0,
+      "rate": "0/6 = 0%",
+      "tokens": 13616,
+      "avg_tokens": 2269
+    },
+    "pretest_hetero": {
+      "name": "P0-前置A/B 异构三法官 (2x DS + Gemini)",
+      "total": 6,
+      "correct": 0,
+      "rate": "0/6 = 0%",
+      "tokens": 22049,
+      "avg_tokens": 3674
+    },
+    "new_hetero": {
+      "name": "新增11用例 异构三法官",
+      "total": 11,
+      "correct": 5,
+      "rate": "5/11 = 45%",
+      "tokens": 51057,
+      "avg_tokens": 4641
+    },
+    "baseline_claude": {
+      "name": "强模型基线 (Claude Sonnet 5 单法官, 8用例)",
+      "total": 8,
+      "correct": 3,
+      "rate": "3/8 = 38%",
+      "tokens": 8224,
+      "avg_tokens": 1028
+    },
+    "all_hetero": {
+      "name": "全17用例 异构三法官 (综合)",
+      "total": 17,
+      "correct": 5,
+      "rate": "5/17 = 29%",
+      "tokens": 73106,
+      "avg_tokens": 4300
+    }
+  },
+  "case_comparison": {
+    "case1": {
+      "single": {
+        "verdict": "PASS",
+        "correct": false,
+        "tokens": 493
+      },
+      "hetero": {
+        "verdict": "FAIL",
+        "correct": false,
+        "tokens": 3206
+      }
+    },
+    "case5": {
+      "single": {
+        "verdict": "PASS",
+        "correct": false,
+        "tokens": 711
+      },
+      "hetero": {
+        "verdict": "FAIL",
+        "correct": false,
+        "tokens": 2792
+      }
+    },
+    "case9": {
+      "single": {
+        "verdict": "FAIL",
+        "correct": false,
+        "tokens": 945
+      },
+      "hetero": {
+        "verdict": "FAIL",
+        "correct": false,
+        "tokens": 4200
+      }
+    },
+    "case10": {
+      "single": {
+        "verdict": "PASS",
+        "correct": false,
+        "tokens": 920
+      },
+      "hetero": {
+        "verdict": "FAIL",
+        "correct": false,
+        "tokens": 3525
+      }
+    },
+    "S1": {
+      "single": {
+        "verdict": "PASS",
+        "correct": false,
+        "tokens": 901
+      },
+      "hetero": {
+        "verdict": "PASS",
+        "correct": false,
+        "tokens": 4120
+      }
+    },
+    "S5": {
+      "single": {
+        "verdict": "PASS",
+        "correct": false,
+        "tokens": 961
+      },
+      "hetero": {
+        "verdict": "FAIL",
+        "correct": false,
+        "tokens": 4206
+      }
+    },
+    "case2": {
+      "hetero": {
+        "verdict": "PASS",
+        "correct": false,
+        "tokens": 5145
+      },
+      "claude": {
+        "verdict": "PASS",
+        "correct": false,
+        "tokens": 945
+      }
+    },
+    "case3": {
+      "hetero": {
+        "verdict": "PASS",
+        "correct": true,
+        "tokens": 3509
+      }
+    },
+    "case4": {
+      "hetero": {
+        "verdict": "PASS",
+        "correct": false,
+        "tokens": 2745
+      },
+      "claude": {
+        "verdict": "FAIL",
+        "correct": true,
+        "tokens": 453
+      }
+    },
+    "case6": {
+      "hetero": {
+        "verdict": "FAIL",
+        "correct": true,
+        "tokens": 3376
+      },
+      "claude": {
+        "verdict": "FAIL",
+        "correct": true,
+        "tokens": 548
+      }
+    },
+    "case7": {
+      "hetero": {
+        "verdict": "FAIL",
+        "correct": true,
+        "tokens": 3160
+      }
+    },
+    "case8": {
+      "hetero": {
+        "verdict": "PASS",
+        "correct": false,
+        "tokens": 3700
+      },
+      "claude": {
+        "verdict": "PASS",
+        "correct": false,
+        "tokens": 855
+      }
+    },
+    "S2": {
+      "hetero": {
+        "verdict": "FAIL",
+        "correct": true,
+        "tokens": 5928
+      }
+    },
+    "S3": {
+      "hetero": {
+        "verdict": "FAIL",
+        "correct": false,
+        "tokens": 7442
+      },
+      "claude": {
+        "verdict": "FAIL",
+        "correct": false,
+        "tokens": 1278
+      }
+    },
+    "S4": {
+      "hetero": {
+        "verdict": "FAIL",
+        "correct": false,
+        "tokens": 6935
+      },
+      "claude": {
+        "verdict": "FAIL",
+        "correct": false,
+        "tokens": 1846
+      }
+    },
+    "S6": {
+      "hetero": {
+        "verdict": "PASS",
+        "correct": false,
+        "tokens": 3761
+      },
+      "claude": {
+        "verdict": "PASS",
+        "correct": false,
+        "tokens": 1252
+      }
+    },
+    "S7": {
+      "hetero": {
+        "verdict": "FAIL",
+        "correct": true,
+        "tokens": 5356
+      },
+      "claude": {
+        "verdict": "FAIL",
+        "correct": true,
+        "tokens": 1047
+      }
+    }
+  },
+  "findings": {
+    "hetero_vs_single": "83% vs 17% on 6 pretest cases",
+    "full_pipeline_gap": "100% (v0.2) vs 59% (v0.3 judge-only) = 41% gap",
+    "deep_dive": "Saved 2 cases, caused 1 false positive",
+    "strong_baseline": "Claude 3/8=38% vs Hetero 2/8=25%",
+    "universal_blind_spots": [
+      "case1",
+      "case5",
+      "case9",
+      "case10",
+      "S1",
+      "S5",
+      "case2",
+      "case8",
+      "S3",
+      "S4",
+      "S6"
+    ]
+  }
+}

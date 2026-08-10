@@ -1,0 +1,38 @@
+[
+  {
+    "case": "S3",
+    "gt": "PASS",
+    "verdict": "FAIL",
+    "correct": false,
+    "hetero": "FAIL (false positive)",
+    "tokens": 1278,
+    "latency": 89.3
+  },
+  {
+    "case": "S4",
+    "gt": "PASS",
+    "verdict": "FAIL",
+    "correct": false,
+    "hetero": "FAIL (all over-strict)",
+    "tokens": 1846,
+    "latency": 46.1
+  },
+  {
+    "case": "case6",
+    "gt": "FAIL",
+    "verdict": "FAIL",
+    "correct": true,
+    "hetero": "FAIL (correct)",
+    "tokens": 548,
+    "latency": 26.5
+  },
+  {
+    "case": "S7",
+    "gt": "FAIL",
+    "verdict": "FAIL",
+    "correct": true,
+    "hetero": "FAIL (correct, deep dive)",
+    "tokens": 1047,
+    "latency": 24.3
+  }
+]

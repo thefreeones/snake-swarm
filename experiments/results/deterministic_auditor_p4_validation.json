@@ -1,0 +1,59 @@
+{
+  "summary": {
+    "passed": 3,
+    "failed": 1,
+    "total_saved": 12905,
+    "comparison": "P4 LLM审计消耗12905 token → 确定性审计零token"
+  },
+  "reports": [
+    {
+      "repair_id": "case8_get_user_info",
+      "verdict": "PASS",
+      "L1_bug_eliminated": true,
+      "L1_side_effects": [],
+      "L2_summary": "3/3",
+      "recommendation": "",
+      "token_saved": 3224
+    },
+    {
+      "repair_id": "S2_compute_variance",
+      "verdict": "PASS",
+      "L1_bug_eliminated": true,
+      "L1_side_effects": [],
+      "L2_summary": "N/A",
+      "recommendation": "",
+      "token_saved": 4302
+    },
+    {
+      "repair_id": "S6_duplicate_list",
+      "verdict": "PASS",
+      "L1_bug_eliminated": true,
+      "L1_side_effects": [],
+      "L2_summary": "N/A",
+      "recommendation": "",
+      "token_saved": 2262
+    },
+    {
+      "repair_id": "case2_safe_divide",
+      "verdict": "FAIL",
+      "L1_bug_eliminated": true,
+      "L1_side_effects": [
+        {
+          "pattern": "bool_is_int_trap",
+          "severity": "P1",
+          "line": 2,
+          "description": "isinstance(x,(int,float))在x=True时返回True→bool漏检"
+        },
+        {
+          "pattern": "inf_nan_passthrough",
+          "severity": "P1",
+          "line": 9,
+          "description": "float('inf')/float('nan')通过类型检查但int()转换报错"
+        }
+      ],
+      "L2_summary": "3/4",
+      "recommendation": "回归测试失败: ['除零→None']",
+      "token_saved": 3117
+    }
+  ]
+}

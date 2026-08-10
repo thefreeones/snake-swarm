@@ -1,0 +1,14 @@
+[
+  {
+    "function": "smart_truncate",
+    "description": "neg max_length causes unexpected truncation: smart_truncate('hello-world', max_length=-1) returns 'hello-worl' instead of 'hello-world'",
+    "error_type": "逻辑错误(条件判断)",
+    "trigger": "'hello-world', max_length=-1"
+  },
+  {
+    "function": "smart_truncate",
+    "description": "empty separator+word_boundary causes ValueError crash: smart_truncate('helloworld', max_length=5, word_boundary=True, separator='')",
+    "error_type": "边界条件缺失",
+    "trigger": "'helloworld', max_length=5, word_boundary=True, separator=''"
+  }
+]

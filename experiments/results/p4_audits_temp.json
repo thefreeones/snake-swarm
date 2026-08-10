@@ -1,0 +1,34 @@
+{
+  "case8": {
+    "audit_report": "1. **原始bug消除情况:**\n   - Bug: 缺少 `name`/`email` 键时抛出 `KeyError`。\n   - 状态: **已消除**\n   - 理由: 修复代码将直接索引访问 `user['name']` 和 `user['email']` 替换为 `user.get('name')` 和 `user.get('email')`。当字典中不存在对应键时，`.get()` 会默认返回 `None` 而不会抛出 `KeyError`，符合原始期望。\n\n2. **新bug检查:**\n   - **无新bug**\n   - 详细审查分析：\n     - **语法与逻辑**: `.get()` 的使用完全符合 Python 标准用法，没有改变原有流程控制逻辑。\n     - **类型安全与边界条件**:\n       - 当 `name` 或 `email` 缺失时，返回 `None` 占位，结构保持为包含 `'name'` 和 `'email'` 键的字典，契合类型预期。\n       - *注意（潜在遗留隐患而非新引入bug）*: `if user['id'] == user_id:` 仍采用直接键访问。若 `data` 中的字典对象本身缺少 `'id'` 键，仍会抛出 `KeyError`。但这属于未在此次修复范围内修改的原有代码行为，修改本身并未引入新问题。\n\n3. **回归测试覆盖:**\n   - **充分**\n   - 理由:\n     - 完整覆盖了原始 bug 场景：分别测试了缺失 `email`、缺失 `name`、以及两者同时缺失的情况（`test_get_user_info_missing_fields`）。\n     - 覆盖了正常场景（`test_get_user_info_normal`）。\n     - 覆盖了未匹配到用户的情况（`test_get_user_info_not_found`）。\n\n4. **判决: REPAIR_SUCCESS**",
+    "verdict": "REPAIR_SUCCESS",
+    "has_new_bugs": false,
+    "coverage_sufficient": true,
+    "tokens": 3224,
+    "latency": 7.3
+  },
+  "S2": {
+    "audit_report": "严格回归审计报告如下：\n\n---\n\n### 1. 原始bug消除情况:\n- **Bug S2 (灾难性抵消导致输出0或负数): 已消除**\n  - **理由**: 修复代码弃用了容易发生数值不稳定的原始双乘积公式 $E[X^2] - E[X]^2$，改用数值稳定的 **Welford 在线更新算法**。Welford 算法通过增量计算均值和差值积（`delta * delta2`），避免了大数减大数造成的有效位数丢失，彻底解决了大基数小方差场景下的灾难性抵消问题。\n\n---\n\n### 2. 新bug检查:\n- **无新bug**\n  - **算法正确性**: 代码中 `delta = x - mean` 与 `delta2 = x - mean`（更新 mean 后）的组合完美符合 Welford 算法公式 $M_{2, k} = M_{2, k-1} + (x_k - \\mu_{k-1})(x_k - \\mu_k)$。\n  - **边界条件处理**:\n    - **空列表 (`data = []`)**: 触发 `ZeroDivisionError`，行为与原代码保持一致（原代码 `n=0` 时 `sum_x * sum_x / n` 也会抛出 `ZeroDivisionError`）。\n    - **单元素 (`len=1`)**: 正确返回 `0.0`。\n    - **相同元素**: 正确返回 `0.0`。\n  - **类型与性能**: 支持可迭代对象（如生成器，比原代码需要 `len()` 更加通用），无额外内存开销，时间复杂度 $O(N)$，无内存泄漏或性能退化问题。\n\n---\n\n### 3. 回归测试覆盖:\n- **充分**\n  - **原始Bug场景**: `test_variance_large_numbers_small_variance` 覆盖了基数为 $10^6$ 且数值微小波动的极端场景。\n  - **边界场景**: 覆盖了单元素 (`test_variance_single_element`)、全相同数值 (`test_variance_identical_values`) 和空列表 (`test_variance_empty_list`)。\n  - **改进建议（非阻断性）**: `test_variance_large_numbers_small_variance` 中仅断言了 `result > 0`，建议增加精确值校验（如 `math.isclose(result, 2e-6, rel_tol=1e-5)`）以提高测试严密性。\n\n---\n\n### 4. 判决: REPAIR_SUCCESS",
+    "verdict": "REPAIR_SUCCESS",
+    "has_new_bugs": false,
+    "coverage_sufficient": true,
+    "tokens": 4302,
+    "latency": 9.0
+  },
+  "S6": {
+    "audit_report": "1. **原始bug消除情况:**\n   - Bug S6: **已消除**，理由: 修复后的代码不再使用产生共享引用的列表乘法 `[lst] * 2`，而是显式使用了 `copy.deepcopy(lst)` 两次。返回结果中的两个元素以及原始输入 `lst` 在内存中均独立，修改其中任何一个都不会影响其他元素，彻底消除了浅拷贝引发的共享引用问题。\n\n2. **新bug检查:**\n   - **无新bug**\n     - *边界条件*: 空列表 `[]` 可正常拷贝；支持包含循环引用的复杂对象（`copy.deepcopy` 自带解环机制）；支持各种基础类型与组合数据结构。\n     - *类型安全*: Python 的 `copy.deepcopy` 能够安全处理大部分可拷贝对象。\n     - *逻辑正确性*: 正确返回包含两个独立深拷贝副本的列表 `[copy.deepcopy(lst), copy.deepcopy(lst)]`。\n     - *性能/资源*: 虽然 `deepcopy` 相比浅拷贝有轻微的性能开销，但为了满足深层数据隔离的需求，此设计合理且符合预期。\n\n3. **回归测试覆盖:**\n   - **充分**，理由:\n     - `test_duplicate_list_independent_top_level`: 覆盖了顶层可变列表修改时的独立性验证，以及对原对象无侧效应的验证。\n     - `test_duplicate_list_nested_independence`: 覆盖了深层嵌套对象（字典、嵌套列表）修改时的独立性验证（深拷贝关键路径）。\n     - `test_duplicate_list_empty`: 覆盖了空列表这一边界条件。\n\n4. **判决: REPAIR_SUCCESS**",
+    "verdict": "REPAIR_SUCCESS",
+    "has_new_bugs": false,
+    "coverage_sufficient": true,
+    "tokens": 2262,
+    "latency": 8.5
+  },
+  "case2": {
+    "audit_report": "1. **原始bug消除情况:**\n   - Bug 1 (字符串等非数值类型未校验导致 TypeError): **已消除**。通过引入 `isinstance(..., (int, float))` 检查，传入字符串、列表、None 等类型时会直接安全地返回 `None`，不再触发 `TypeError`。\n\n2. **新bug检查:**\n   - **发现新bug**:\n     1. **`bool` 类型未严格过滤（隐患与测试失败）**：在 Python 中，`bool` 是 `int` 的子类（即 `isinstance(True, int)` 为 `True`）。修复代码使用 `isinstance(a, (int, float))` 无法拦截 `bool` 类型。当传入 `safe_divide(True, 1)` 时，代码不会返回 `None` 而是返回 `1`，这直接导致回归测试用例 `test_safe_divide_edge_type_checks` 失败。正确做法需补充 `and not isinstance(x, bool)` 或校验 `type(x) in (int, float)`。\n     2. **特殊 Float 值未防御（未处理溢出/NaN）**：如果传入 `float('inf')` 或 `float('nan')`，可以通过 `isinstance` 校验，但在执行 `int(result)` 时会抛出 `OverflowError` 或 `ValueError` 导致程序崩溃。\n\n3. **回归测试覆盖:**\n   - **不充分/测试未通过**：\n     - 虽然回归测试用例覆盖了字符串、None、列表、0除、浮点数以及 `bool` 类型边界，但由于修复代码存在逻辑漏洞，修复后的代码**无法通过** `test_safe_divide_edge_type_checks` 中的 `assert safe_divide(True, 1) is None` 断言。\n     - 未覆盖极端浮点数场景（如 `float('nan')`、`float('inf')`）。\n\n4. **判决**: REPAIR_FAIL",
+    "verdict": "REPAIR_FAIL",
+    "has_new_bugs": true,
+    "coverage_sufficient": false,
+    "tokens": 3117,
+    "latency": 6.5
+  }
+}

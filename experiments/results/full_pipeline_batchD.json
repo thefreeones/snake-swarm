@@ -1,0 +1,118 @@
+[
+  {
+    "case": "S1",
+    "gt": "FAIL",
+    "final_verdict": "FAIL",
+    "correct": true,
+    "total_tokens": 6627,
+    "votes": [
+      "FAIL",
+      "PASS",
+      "FAIL"
+    ],
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "FAIL",
+        "tokens": 1721
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "PASS",
+        "tokens": 1258
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "verdict": "FAIL",
+        "tokens": 2606
+      }
+    ]
+  },
+  {
+    "case": "S2",
+    "gt": "FAIL",
+    "final_verdict": "PASS",
+    "correct": false,
+    "total_tokens": 6544,
+    "votes": [
+      "PASS",
+      "PASS",
+      "FAIL"
+    ],
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "PASS",
+        "tokens": 1487
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "PASS",
+        "tokens": 1536
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "verdict": "FAIL",
+        "tokens": 2829
+      }
+    ]
+  },
+  {
+    "case": "S3",
+    "gt": "PASS",
+    "final_verdict": "FAIL",
+    "correct": false,
+    "total_tokens": 8599,
+    "votes": [
+      "FAIL",
+      "PASS",
+      "FAIL"
+    ],
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "FAIL",
+        "tokens": 2133
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "PASS",
+        "tokens": 2133
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "verdict": "FAIL",
+        "tokens": 3248
+      }
+    ]
+  },
+  {
+    "case": "S4",
+    "gt": "PASS",
+    "final_verdict": "FAIL",
+    "correct": false,
+    "total_tokens": 8511,
+    "votes": [
+      "FAIL",
+      "PASS",
+      "FAIL"
+    ],
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "FAIL",
+        "tokens": 1690
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "PASS",
+        "tokens": 1930
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "verdict": "FAIL",
+        "tokens": 3921
+      }
+    ]
+  }
+]

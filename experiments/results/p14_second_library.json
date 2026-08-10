@@ -1,0 +1,260 @@
+{
+  "experiment": "P14-second-library-validation",
+  "library": "validators",
+  "library_version": "0.35.0",
+  "pipeline": "蛇群全优化 (P10-P13组合)",
+  "optimizations": {
+    "P10_batch_judge": "DS+Gemini, 一次C1调用审查所有修复 (节省~68%)",
+    "P11_layered_head": "L1/L2→DeepSeek精简, L3→Claude完整",
+    "P12_head_cache": "首bug全文件→后续仅目标函数+缓存 (节省~58%)",
+    "P13_fix_templates": "6个模板优先匹配, 命中零token修复",
+    "deterministic_auditor": "L1/L2零token规则引擎"
+  },
+  "date": "2026-08-06",
+  "api_provider": "tokeness",
+  "bug_count": 4,
+  "bugs": [
+    {
+      "bug_id": "vld-1-email-type",
+      "title": "email validator: 非字符串输入导致未处理的AttributeError",
+      "error_type": "类型检查缺失",
+      "complexity": "L1",
+      "pipeline": "P14-optimized",
+      "head_model": "deepseek-v4-pro",
+      "head_cache_type": "cold",
+      "template_hit": null,
+      "head_usage": {
+        "prompt_tokens": 1060,
+        "completion_tokens": 970,
+        "total_tokens": 2030,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 836
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 1060
+      },
+      "fix_usage": {
+        "prompt_tokens": 1135,
+        "completion_tokens": 1042,
+        "total_tokens": 9882,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 128
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 1135
+      },
+      "verdict": "FAIL",
+      "tokens_head": 2030,
+      "tokens_fix": 9882,
+      "tokens_audit": 0,
+      "rounds": 2,
+      "fix_code_preview": null,
+      "maintainer_fix": "添加 isinstance(value, str) 检查或扩增validator装饰器捕获AttributeError"
+    },
+    {
+      "bug_id": "vld-2-card-strip",
+      "title": "card_number: 未trim输入导致带空格卡号被拒绝",
+      "error_type": "边界条件缺失",
+      "complexity": "L1",
+      "pipeline": "P14-optimized",
+      "head_model": "deepseek-v4-pro",
+      "head_cache_type": "warm",
+      "template_hit": null,
+      "head_usage": {
+        "prompt_tokens": 1739,
+        "completion_tokens": 288,
+        "total_tokens": 2027,
+        "prompt_tokens_details": {
+          "cached_tokens": 1664
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 175
+        },
+        "prompt_cache_hit_tokens": 1664,
+        "prompt_cache_miss_tokens": 75
+      },
+      "fix_usage": {
+        "prompt_tokens": 1786,
+        "completion_tokens": 1647,
+        "total_tokens": 6694,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 51
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 1786
+      },
+      "verdict": "FAIL",
+      "tokens_head": 2027,
+      "tokens_fix": 6694,
+      "tokens_audit": 0,
+      "rounds": 2,
+      "fix_code_preview": null,
+      "maintainer_fix": "添加 value = value.strip() 预处理"
+    },
+    {
+      "bug_id": "vld-3-domain-generator",
+      "title": "_IanaTLD._retrieve(): 生成器每次调用重新读取文件",
+      "error_type": "性能/逻辑错误(生成器复用)",
+      "complexity": "L2",
+      "pipeline": "P14-optimized",
+      "head_model": "deepseek-v4-pro",
+      "head_cache_type": "warm",
+      "template_hit": null,
+      "head_usage": {
+        "prompt_tokens": 1040,
+        "completion_tokens": 2279,
+        "total_tokens": 3319,
+        "prompt_tokens_details": {
+          "cached_tokens": 1024
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 2104
+        },
+        "prompt_cache_hit_tokens": 1024,
+        "prompt_cache_miss_tokens": 16
+      },
+      "fix_usage": {
+        "prompt_tokens": 1137,
+        "completion_tokens": 1253,
+        "total_tokens": 2390,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 403
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 1137
+      },
+      "verdict": "PASS_FIX",
+      "tokens_head": 3319,
+      "tokens_fix": 2390,
+      "tokens_audit": 0,
+      "rounds": 1,
+      "fix_code_preview": "\"\"\"Domain.\"\"\"\n\n# standard\nfrom os import environ\nfrom pathlib import Path\nimport re\nfrom typing import Optional, Set\n\n# local\nfrom .utils import validator\n\n\nclass _IanaTLD:\n    \"\"\"Read IANA TLDs, and optionally cache them.\"\"\"\n\n    _full_cache: Optional[Set[str]] = None\n    # source: https://www.stat",
+      "maintainer_fix": "将生成器缓存为set避免重复IO",
+      "audit_verdict": "FAIL",
+      "audit_L1": {
+        "bug_eliminated": false,
+        "trigger_output": "输出错误: 期望True, 实际",
+        "trigger_passed": false
+      },
+      "audit_side_effects": []
+    },
+    {
+      "bug_id": "vld-4-url-fragment",
+      "title": "url: fragment正则过于严格拒绝合法fragment字符",
+      "error_type": "正则表达式过度严格",
+      "complexity": "L3",
+      "pipeline": "P14-optimized",
+      "head_model": "claude-sonnet-5",
+      "head_cache_type": "warm",
+      "template_hit": null,
+      "head_usage": {
+        "prompt_tokens": 3374,
+        "completion_tokens": 453,
+        "total_tokens": 3827,
+        "usage_semantic": "openai",
+        "usage_source": "anthropic",
+        "billing_usage": {
+          "source": "claude_messages",
+          "semantic": "anthropic",
+          "claude_usage": {
+            "input_tokens": 3374,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "output_tokens": 453,
+            "cache_creation": {},
+            "claude_cache_creation_5_m_tokens": 0,
+            "claude_cache_creation_1_h_tokens": 0
+          }
+        },
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0
+        },
+        "completion_tokens_details": {
+          "text_tokens": 0,
+          "audio_tokens": 0,
+          "image_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "input_tokens": 3374,
+        "output_tokens": 0,
+        "input_tokens_details": null,
+        "claude_cache_creation_5_m_tokens": 0,
+        "claude_cache_creation_1_h_tokens": 0
+      },
+      "fix_usage": {
+        "prompt_tokens": 2518,
+        "completion_tokens": 3069,
+        "total_tokens": 5587,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 903
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 2518
+      },
+      "verdict": "PASS_FIX",
+      "tokens_head": 3827,
+      "tokens_fix": 5587,
+      "tokens_audit": 0,
+      "rounds": 1,
+      "fix_code_preview": "\"\"\"URL.\"\"\"\n\n# standard\nfrom functools import lru_cache\nimport re\nfrom typing import Callable, Optional\nfrom urllib.parse import parse_qs, unquote, urlsplit\n\n# local\nfrom .hostname import hostname\nfrom .utils import validator\n\n\n@lru_cache\ndef _username_regex():\n    return re.compile(\n        # extend",
+      "maintainer_fix": "扩展fragment正则字符集",
+      "audit_verdict": "FAIL",
+      "audit_L1": {
+        "bug_eliminated": false,
+        "trigger_output": "输出错误: 期望True, 实际",
+        "trigger_passed": false
+      },
+      "audit_side_effects": []
+    }
+  ],
+  "batch_judge": {
+    "total_tokens": 2688,
+    "judges": [
+      {
+        "judge": "DS-t0.3",
+        "tokens": 1230
+      },
+      {
+        "judge": "Gemini-t0.3",
+        "tokens": 1458
+      }
+    ],
+    "per_bug_verdicts": {}
+  },
+  "metrics": {
+    "total_tokens": 38444,
+    "per_bug_tokens": 9611.0,
+    "head_tokens": 11203,
+    "fix_tokens": 24553,
+    "audit_tokens": 0,
+    "judge_tokens": 2688,
+    "template_hit_count": 0,
+    "template_hit_rate": "0/4 (0%)",
+    "fix_success_rate": "2/4 (50%)"
+  },
+  "comparison": {
+    "p8_baseline_per_bug": 8400,
+    "p14_achieved_per_bug": 9611.0,
+    "reduction_pct": -14.4,
+    "target_per_bug": 4500,
+    "target_achieved": false
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "phase": "P13 修复模板缓存",
+  "templates": 6,
+  "template_hit_rate": "6/9 (67%)",
+  "templates_by_bug": {
+    "dict_get": "case8(P4)",
+    "truthiness_check": "bug-185(P8)",
+    "empty_separator_guard": "bug-186(P8)",
+    "shallow_copy": "S6(P4)",
+    "broad_except_scope": "bug-178(P8)",
+    "missing_type_check": "case2(P4)"
+  },
+  "estimated_savings": {
+    "fix_snake_token_per_hit": 1726,
+    "total_hits": 6,
+    "total_token_saved": 10356,
+    "per_bug_savings": 1150,
+    "cost_after_p13": 4469,
+    "pct_from_baseline": 46
+  }
+}

@@ -1,0 +1,92 @@
+[
+  {
+    "case": "case8",
+    "gt": "FAIL",
+    "final_verdict": "FAIL",
+    "correct": true,
+    "total_tokens": 6957,
+    "votes": [
+      "FAIL",
+      "FAIL",
+      "FAIL"
+    ],
+    "snake_head_analysis": "## 1. 任务分解\n\n- 输入：`people` —— 一个字典列表，每个字典代表一个人\n- 处理：遍历每个字典，取出 `age` 字段，判断是否 `>= 18`\n- 输出：满足条件的字典组成的新列表（筛选，不修改原数据）\n- 隐含子任务：字段存在性校验、类型校验、返回值结构是否与输入一致\n\n## 2. 风险点\n\n**边界**\n- `age == 18` 是否算成年人（题目写的是 `>=`，需要",
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "FAIL",
+        "tokens": 1694
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "FAIL",
+        "tokens": 1480
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "verdict": "FAIL",
+        "tokens": 2723
+      }
+    ]
+  },
+  {
+    "case": "case9",
+    "gt": "FAIL",
+    "final_verdict": "PASS",
+    "correct": false,
+    "total_tokens": 8122,
+    "votes": [
+      "PASS",
+      "PASS",
+      "FAIL"
+    ],
+    "snake_head_analysis": "## 风险地图：fibonacci(n)\n\n### 1. 任务分解\n- 输入处理：校验 n 的类型与范围\n- 边界情况：n=0、n=1 的直接返回\n- 递推逻辑：从 fib(2) 开始通过 fib(i-1)+fib(i-2) 迭代/递归求值\n- 输出：返回对应索引的斐波那契值\n\n### 2. 风险点\n\n**边界**\n- n=0 → 0，n=1 → 1，容易写成 n<=1 return n 而忽略 ",
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "PASS",
+        "tokens": 1734
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "PASS",
+        "tokens": 1734
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "verdict": "FAIL",
+        "tokens": 3558
+      }
+    ]
+  },
+  {
+    "case": "case10",
+    "gt": "FAIL",
+    "final_verdict": "FAIL",
+    "correct": true,
+    "total_tokens": 7792,
+    "votes": [
+      "FAIL",
+      "FAIL",
+      "FAIL"
+    ],
+    "snake_head_analysis": "## 1. 任务分解\n\n- 输入解析：接收 `db`（连接对象或数据库路径？）与 `user_id`\n- 建立/复用数据库连接，获取 cursor\n- 构造 SQL 查询语句（按主键或用户名查询 users 表）\n- 执行查询并绑定参数\n- 处理结果集：零行 / 一行 / 多行\n- 将结果转换为返回结构（dict / namedtuple / 原生 tuple）\n- 资源释放（cursor、连接是",
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "FAIL",
+        "tokens": 1740
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "FAIL",
+        "tokens": 1740
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "verdict": "FAIL",
+        "tokens": 3203
+      }
+    ]
+  }
+]

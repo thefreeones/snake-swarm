@@ -1,0 +1,46 @@
+{
+  "matches": [
+    {
+      "opponent": "Alice",
+      "result": "win",
+      "played_at": "2026-08-06T11:29:48.471557+00:00",
+      "notes": ""
+    },
+    {
+      "opponent": "Bob",
+      "result": "loss",
+      "played_at": "2026-08-06T11:29:48.565808+00:00",
+      "notes": ""
+    },
+    {
+      "opponent": "Charlie",
+      "result": "draw",
+      "played_at": "2026-08-06T11:29:48.657416+00:00",
+      "notes": "超时平局"
+    },
+    {
+      "opponent": "Alice",
+      "result": "win",
+      "played_at": "2026-08-06T11:29:48.757395+00:00",
+      "notes": ""
+    },
+    {
+      "opponent": "Alice",
+      "result": "win",
+      "played_at": "2026-08-06T11:29:48.846777+00:00",
+      "notes": ""
+    },
+    {
+      "opponent": "Bob",
+      "result": "win",
+      "played_at": "2026-08-06T11:29:48.935080+00:00",
+      "notes": ""
+    },
+    {
+      "opponent": "Alice",
+      "result": "win",
+      "played_at": "2026-08-06T11:30:44.621773+00:00",
+      "notes": ""
+    }
+  ]
+}

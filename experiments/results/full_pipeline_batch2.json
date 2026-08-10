@@ -1,0 +1,299 @@
+{
+  "experiment": "full_pipeline_batch2",
+  "timestamp": "2026-08-04T11:26:48.762526",
+  "total_elapsed_seconds": 241.24911093711853,
+  "config": {
+    "api_base": "https://n.tokeness.io/v1",
+    "snake_head_model": "claude-sonnet-5",
+    "judges": [
+      {
+        "name": "judge1",
+        "model": "deepseek-v4-pro",
+        "temperature": 0.3
+      },
+      {
+        "name": "judge2",
+        "model": "deepseek-v4-pro",
+        "temperature": 0.7
+      },
+      {
+        "name": "judge3",
+        "model": "gemini-3.6-flash",
+        "temperature": 0.3
+      }
+    ],
+    "deep_dive_model": "deepseek-v4-pro"
+  },
+  "cases": [
+    {
+      "id": "case7",
+      "error_type": "L2: resource leak",
+      "ground_truth": "FAIL",
+      "task": "写一个函数 count_lines(filename)，返回文件的行数。",
+      "code": "def count_lines(filename):\n    f = open(filename)\n    lines = f.readlines()\n    return len(lines)",
+      "snake_head_analysis": "## 1. 任务分解\n\n1. 打开文件（处理路径解析、编码问题）\n2. 逐行读取并计数\n3. 关闭文件（或用 with 自动管理）\n4. 返回行数\n\n## 2. 每步风险点\n\n**步骤1 打开文件**\n- 文件不存在 → `FileNotFoundError`，是否需要捕获还是让调用方处理\n- 权限不足 → `PermissionError`\n- 编码问题：默认编码可能不是 UTF-8，非文本/二进制文件会触发 `UnicodeDecodeError`\n- 隐含假设：调用方传入的是合法路径字符串，未做类型检查\n\n**步骤2 逐行计数**\n- 空文件 → 应返回 0，不能默认返回 1\n- 最后一行无换行符时容易漏计或多计（取决于实现方式）\n- 超大文件：如果先 `read().splitlines()` 会一次性加载全部内容，内存占用大；应优先用迭代方式逐行处理\n- 行结束符差异（`\\n` / `\\r\\n` / `\\r`）在文本模式下 Python 会自动做换行转换，但要注意是否用了 `newline=''` 参数\n\n**步骤3 关闭文件**\n- 若未用 `with`，异常发生时文件可能未关闭，造成资源泄漏\n\n**步骤4 返回结果**\n- 返回类型应为 int，注意不要因异常路径返回 None 或抛出未处理的异常\n\n## 3. 不确定性标记\n\n- **编码方式**：函数未指定 encoding 参数，遇到非 UTF-8 文件行为不确定，建议显式声明或允许传参\n- **异常处理策略**：调用方希望函数内部吞掉异常返回 -1/0，还是直接抛出？这个语义未定义，需要确认\n- **\"行数\"的定义**：末尾无换行符的最后一行是否算一行？空文件是否算 0 行？这是最容易产生歧义的点\n- **性能要求**：如果目标文件可能是 GB 级别，是否需要流式统计而非 `readlines()`\n\n推荐实现（默认按“流式、UTF-8、异常上抛”策略）：\n\n```python\ndef count_lines(filename: str) -> int:\n    \"\"\"返回文件的行数（末尾无换行符的最后一行也计入）。\"\"\"\n    count = 0\n    with open(filename, \"r\", encoding=\"utf-8\") as f:\n        for _ in f:\n            count += 1\n    return count\n```\n\n如果需要不同的异常处理或编码策略，告诉我调整方向。",
+      "judges": [
+        {
+          "name": "judge1",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL  \nBug 1: 未使用 `with` 语句管理文件，`open(filename)` 后没有显式 `close()`，依赖垃圾回收关闭文件不可靠，异常时极易造成资源泄漏。  \nBug 2: 未指定 `encoding` 参数，完全依赖平台默认编码；遇到非默认编码（如系统编码不是 UTF-8 的文件）会抛出 `UnicodeDecodeError`，行为不可控。  \nBug 3: 使用 `f.readlines()` 一次性将全部行读入内存，对超大文件（GB 级）会严重占用甚至耗尽内存；应采用流式迭代逐行统计。",
+          "tokens": 1418,
+          "success": true
+        },
+        {
+          "name": "judge2",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\nBug 1: 未使用 `with` 语句管理文件，且没有显式 `f.close()`。当 `open` 成功但后续 `readlines` 因异常（如解码错误）失败时，文件句柄会泄漏，造成资源泄漏。\nBug 2: 未指定 `encoding` 参数，依赖平台默认编码（如 Windows 上可能是 GBK），遇到非默认编码的文件会抛出 `UnicodeDecodeError` 或产生乱码，不符合蛇头分析中明确标记的编码不确定性。\nBug 3: 使用 `readlines()` 一次性将文件全部内容读入内存，无法应对超大文件（如 GB 级日志），可能导致内存耗尽。蛇头分析已指出应优先用迭代方式逐行处理。",
+          "tokens": 1634,
+          "success": true
+        },
+        {
+          "name": "judge3",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "作为区域法官，我结合【蛇头分析】的风险地图，对【蛇身代码】进行了逐行审查。审查结果如下：\n\n### 代码逐行审查\n\n*   **第 1 行：`def count_lines(filename):`**\n    *   **审查**：缺少 `encoding` 参数支持，且没有类型注解和 Docstring。\n*   **第 2 行：`f = open(filename)`**\n    *   **触发风险（资源泄漏）**：未采用 `with open(...)` 上下文管理器。若后续读取过程抛出异常（如解码错误），文件句柄将无法释放，导致句柄泄漏。\n    *   **触发风险（编码问题）**：未显式指定 `encoding`（如 `encoding='utf-8'`）。在不同操作系统（如 Windows 默认 GBK，Linux 默认 UTF-8）下运行行为不一致，极易触发 `UnicodeDecodeError`。\n*   **第 3 行：`lines = f.readlines()`**\n    *   **触发风险（内存爆破）**：使用了 `f.readlines()` 将文件内容**一次性全部加载到内存**中。当遇到大文件（如 GB 级别）时，极易导致内存溢出（OOM）。应采用流式迭代（`for _ in f`）进行计数。\n*   **第 4 行：`return len(lines)`**\n    *   **审查**：在无异常的前提下能正常返回数字，但因前两步的严重隐患，该行代码的可靠性受到破坏。此外，整个函数完全没有对文件进行 `f.close()` 操作。\n\n---\n\n判决: FAIL\n\nBug 1: 未使用 `with` 上下文管理器且未显式调用 `close()`，导致文件句柄泄漏风险（对应蛇头风险-步骤3）。\nBug 2: 使用 `readlines()` 一次性将文件全部加载至内存，处理大文件时存在内存溢出（OOM）隐患，未采用流式逐行读取（对应蛇头风险-步骤2）。\nBug 3: `open()` 未指定 `encoding` 参数，依赖系统默认编码，跨平台兼容性差且易引发 `UnicodeDecodeError`（对应蛇头风险-步骤1）。",
+          "tokens": 2265,
+          "success": true
+        }
+      ],
+      "votes": {
+        "PASS": 0,
+        "FAIL": 3
+      },
+      "deep_dive": null,
+      "final_verdict": "FAIL",
+      "correct": true,
+      "total_tokens": 6385
+    },
+    {
+      "id": "case8",
+      "error_type": "L1: KeyError",
+      "ground_truth": "FAIL",
+      "task": "写一个函数 filter_adults(people)，从字典列表中筛选 age >= 18 的人。",
+      "code": "def filter_adults(people):\n    result = []\n    for person in people:\n        if person['age'] >= 18:\n            result.append(person)\n    return result",
+      "snake_head_analysis": "# 任务分解\n\n**步骤1：定义函数签名**\n`def filter_adults(people: list[dict]) -> list[dict]:`\n\n**步骤2：遍历输入列表**\n对 `people` 中的每个元素进行检查。\n\n**步骤3：提取并校验 age 字段**\n获取每个字典的 `age` 值。\n\n**步骤4：判断条件 age >= 18**\n满足条件则加入结果列表。\n\n**步骤5：返回结果列表**\n\n---\n\n# 风险点分析\n\n| 步骤 | 风险点 |\n|---|---|\n| 步骤1 | 输入不是 list（如传入 None、单个 dict、生成器）会导致后续遍历失败或行为异常 |\n| 步骤2 | 列表中的元素不是 dict（如混入字符串、None）会在取 key 时报错 |\n| 步骤3 | 字典中缺少 `age` 键 → KeyError；字段名拼写不一致（如 `Age`）也会漏判 |\n| 步骤3 | `age` 值类型不是 int（如字符串 `\"20\"`、浮点 `18.5`、None）→ 比较时报错或结果不符预期 |\n| 步骤4 | 边界值 18 本身应算成年（`>=` 而非 `>`），容易被误写 |\n| 步骤4 | 负数年龄或超大异常值（如 -5、999）语义上不合法，但代码不会报错，是否需要校验？ |\n| 步骤5 | 返回的是原字典引用还是拷贝？如果调用方修改返回结果，是否会影响原始数据 |\n\n---\n\n# 不确定性标记（需要向需求方确认或做防御性设计）\n\n1. **age 缺失时的处理策略**：跳过该条 / 抛异常 / 视为不成年？（当前无需求说明）\n2. **age 类型不规范**（字符串数字、浮点数）：是否需要类型转换容错？\n3. **是否需要保留原顺序** vs 是否允许返回新排序结果（一般默认保留顺序，但需确认）。\n4. **空列表输入**：应返回空列表，这个隐含假设需要在测试中显式覆盖。\n5. **性能假设**：默认列表规模较小，若面对超大数据集，是否需要生成器（`yield`）而非一次性构建列表？\n\n---\n\n# 建议实现（防御性版本）\n\n```python\ndef filter_adults(people: list[dict]) -> list[dict]:\n    result = []\n    for person in people:\n        age = person.get(\"age\")\n        if isinstance(age, (int, float)) and age >= 18:\n            result.append(person)\n    return result\n```\n\n这个版本对缺失字段（`get` 返回 None）和非数值类型做了防御，避免 KeyError/TypeError，但**跳过不合规数据**这一策略需要你确认是否符合预期，还是应该显式抛出异常提示数据质量问题。",
+      "judges": [
+        {
+          "name": "judge1",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: 当字典缺少 `age` 键时，`person['age']` 会抛出 KeyError，程序立即崩溃。缺乏防御性取值（如用 `get`）。\nBug 2: 当 `age` 值的类型不可比较（如字符串 `\"abc\"`）或为 `None` 时，`>= 18` 会抛出 TypeError，程序中断。未对类型进行校验。\nBug 3: 列表中若包含非字典元素（如 None、数字），`person['age']` 会抛出 TypeError，程序直接崩溃。",
+          "tokens": 1352,
+          "success": true
+        },
+        {
+          "name": "judge2",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\nBug 1: 没有对 `people` 参数进行类型校验，若传入非列表对象（如 `None`、生成器），`for` 循环会抛出 `TypeError`。\nBug 2: 未检查 `person` 是否为 `dict`，若列表中含有非字典元素（如字符串、`None`），`person['age']` 会抛出 `TypeError` 或 `AttributeError`。\nBug 3: 直接使用 `person['age']` 访问键值，若字典缺少 `'age'` 键，会抛出 `KeyError`。\nBug 4: 未对 `age` 的值进行类型判断，若 `age` 为字符串、`None` 等无法与整数比较的类型，`>=` 运算会抛出 `TypeError`。",
+          "tokens": 1707,
+          "success": true
+        },
+        {
+          "name": "judge3",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "**区域法官审查意见**\n\n作为区域法官，我结合蛇头层提交的【风险地图】对蛇身代码进行了逐行审查：\n\n- **第 1 行 (`def filter_adults(people):`)**：未对 `people` 校验是否为可迭代对象，若传入 `None` 将在第 3 行报错（对应风险点：步骤 1）。\n- **第 2 行 (`result = []`)**：无异常。\n- **第 3 行 (`for person in people:`)**：假定 `person` 一定是 `dict` 类型。若列表混入 `None` 或非字典类型，下一行将触发 `TypeError`（对应风险点：步骤 2）。\n- **第 4 行 (`if person['age'] >= 18:`)**：**严重风险区**\n  1. 使用硬编码下标 `person['age']`，一旦字典中缺失 `age` 键，程序将直接抛出 `KeyError` 崩溃（对应风险点：步骤 3）。\n  2. 未对 `age` 的值进行类型检查，若 `age` 为 `None` 或非数值类型（如字符串 `\"20\"`），比较操作将触发 `TypeError` 导致程序中断（对应风险点：步骤 3）。\n- **第 5-6 行 (`result.append(person)` / `return result`)**：逻辑符合基本筛选逻辑，但由于前置逻辑过于脆弱，无法安全到达此步。\n\n---\n\n判决: FAIL\n\nBug 1: **硬编码字典键名导致 KeyError 风险**（第 4 行）\n代码使用 `person['age']` 强制读取键值。若输入的字典中缺失 `age` 字段，程序会抛出 `KeyError` 崩溃。应使用 `person.get('age')` 或安全提取方式。\n\nBug 2: **缺乏类型防御导致 TypeError 崩溃**（第 4 行）\n代码直接将 `person['age']` 与数字 `18` 进行 `>=` 比较。如果 `age` 的值为 `None`、字符串（如 `\"18\"`）或其他不可比较类型，代码在运行时会抛出 `TypeError` 异常终止执行。\n\nBug 3: **缺少对列表中元素类型的校验**（第 3-4 行）\n代码默认 `people` 中的每个元素都是字典，未考虑列表中混入非法元素（如 `None` 或 `str`）的情况，直接执行 `person['age']` 会抛出 `TypeError`。",
+          "tokens": 2757,
+          "success": true
+        }
+      ],
+      "votes": {
+        "PASS": 0,
+        "FAIL": 3
+      },
+      "deep_dive": null,
+      "final_verdict": "FAIL",
+      "correct": true,
+      "total_tokens": 7016
+    },
+    {
+      "id": "case9",
+      "error_type": "L2: negative input",
+      "ground_truth": "FAIL",
+      "task": "写一个函数 fibonacci(n)，返回第n个斐波那契数（0-indexed：fib(0)=0, fib(1)=1）。",
+      "code": "def fibonacci(n):\n    if n <= 1:\n        return n\n    a, b = 0, 1\n    for _ in range(n-1):\n        a, b = b, a + b\n    return b",
+      "snake_head_analysis": "## 1. 任务分解\n\n1. 确定函数签名与语言（假设用 Python，若无特殊说明）\n2. 处理输入合法性（是否校验 n 的类型和范围）\n3. 处理边界情况：n=0, n=1\n4. 选择实现方式：递归 / 迭代 / 动态规划(记忆化) / 矩阵快速幂\n5. 实现主逻辑（推荐迭代法，兼顾性能与可读性）\n6. 编写测试用例验证（n=0,1,2,10 等）\n7. 返回结果\n\n## 2. 每步风险点\n\n| 步骤 | 风险点 |\n|---|---|\n| 函数签名 | 未指定语言，需明确假设（默认 Python） |\n| 输入校验 | n 为负数、非整数（如浮点、字符串）时行为未定义；是否要抛异常还是返回默认值 |\n| 边界情况 | fib(0)=0, fib(1)=1 是题目给定的约定，需与常见\"1-indexed\"版本区分，避免混淆 |\n| 实现方式选择 | 朴素递归时间复杂度 O(2^n)，n 稍大（如 n=40+）会严重超时；必须避免 |\n| 主逻辑 | 迭代法要注意循环次数是 n-1 次还是 n 次，容易出现 off-by-one 错误 |\n| 大数处理 | n 很大时（如 n=10000），斐波那契数会非常大，Python 整数无上限没问题，但其他语言（如 int32/int64）会溢出 |\n| 测试 | 若只测 n=0,1 无法暴露 off-by-one 错误，需覆盖 n=2 及以上 |\n\n## 3. 不确定性标记\n\n- **索引约定**：题目明确 0-indexed（fib(0)=0, fib(1)=1），需严格遵守，不要按常见的 1-indexed(fib(1)=1, fib(2)=1) 实现\n- **异常输入处理策略未指定**：负数 n、非整数 n 应该报错还是静默处理，需要向用户确认或选择保守方案（抛 ValueError）\n- **性能要求未指定**：n 的取值范围未知，若可能是大 n（如上万），需用迭代/快速幂而非递归；若题目场景明确是小 n，可以放宽\n- **语言未指定**：默认按 Python 实现，若实际需求是其他语言（如 JS/Java 存在整数溢出问题）需另行确认\n\n给出建议实现（迭代法，兼顾正确性与效率）：\n\n```python\ndef fibonacci(n: int) -> int:\n    if not isinstance(n, int) or n < 0:\n        raise ValueError(\"n must be a non-negative integer\")\n    if n == 0:\n        return 0\n    a, b = 0, 1\n    for _ in range(n - 1):\n        a, b = b, a + b\n    return b\n```",
+      "judges": [
+        {
+          "name": "judge1",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\nBug 1: 缺少输入校验，未处理负数及非整数输入。代码对负数 `n` 直接返回 `n`（如 `fibonacci(-1)` 返回 `-1`），不符合斐波那契数定义域要求。按照蛇头分析风险点，应当对非法输入抛出 `ValueError` 或至少明确处理，否则会静默返回错误值，产生未定义行为。",
+          "tokens": 1968,
+          "success": true
+        },
+        {
+          "name": "judge2",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL  \nBug 1: 输入校验缺失。当 n 为负数时，代码会直接返回 n（例如 fibonacci(-1) 返回 -1），而非抛错或按未定义行为处理，与期望的“n 为非负整数才可计算斐波那契数”的约定不符。蛇头分析已明确负数属于未定义输入，保守方案应抛出 ValueError。建议增加类型和范围检查（如蛇头建议实现所示）。",
+          "tokens": 1445,
+          "success": true
+        },
+        {
+          "name": "judge3",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "作为区域法官，我结合蛇头分析（风险地图）对蛇身生成的代码进行逐行审查如下：\n\n### 代码审查过程\n\n1. **类型校验与负数风险（对应蛇头风险点：输入校验）**\n   - 蛇身代码：`if n <= 1: return n`\n   - **问题 1**：当传入负数（如 `n = -1`）时，直接返回 `-1`。在 0-indexed 斐波那契数列定义中，负数索引未定义（或不等于自身），应抛出异常（如 `ValueError`），此处存在逻辑 Bug。\n   - **问题 2**：未做类型检查。传入非整数（如 `n = 0.5` 时返回 `0.5`；`n = 2.5` 时在 `range(n-1)` 触发隐式 `TypeError`），未达到防御性编程要求。\n\n2. **边界条件与 off-by-one 审查（对应蛇头风险点：边界情况与主逻辑）**\n   - `n = 0`：满足 `n <= 1`，返回 `0`（正确）\n   - `n = 1`：满足 `n <= 1`，返回 `1`（正确）\n   - `n = 2`：跳过 `if`，`range(1)` 循环 1 次，`a, b` 更新为 `1, 1`，返回 `1`（正确）\n   - `n = 3`：`range(2)` 循环 2 次，`a, b` 更新为 `1, 2`，返回 `2`（正确）\n   - 迭代次数控制无 off-by-one 错误，主算法逻辑正确。\n\n3. **性能与大数风险（对应蛇头风险点：实现方式与大数处理）**\n   - 采用 $O(n)$ 时间复杂度、$O(1)$ 空间复杂度的迭代法，Python 自动处理大整数，无溢出风险。\n\n---\n\n### 判决\n\n判决: FAIL\n\nBug 1: **负数处理逻辑错误**。当输入 `n < 0`（如 `n = -1`）时，代码直接返回 `n` 本身，这不符合斐波那契数列定义。应参照蛇头建议，对负数抛出 `ValueError` 异常。\n\nBug 2: **缺乏输入类型校验**。未校验 `n` 是否为整数类型（`isinstance(n, int)`），当传入浮点数或非数值类型时，会导致非法返回值或隐式运行报错。",
+          "tokens": 3649,
+          "success": true
+        }
+      ],
+      "votes": {
+        "PASS": 0,
+        "FAIL": 3
+      },
+      "deep_dive": null,
+      "final_verdict": "FAIL",
+      "correct": true,
+      "total_tokens": 8284
+    },
+    {
+      "id": "case10",
+      "error_type": "L3: SQL injection",
+      "ground_truth": "FAIL",
+      "task": "写一个函数 get_user(db, user_id)，从数据库查询用户信息。使用 sqlite3。",
+      "code": "def get_user(db, user_id):\n    cursor = db.cursor()\n    cursor.execute(f\"SELECT * FROM users WHERE id = {user_id}\")\n    return cursor.fetchone()",
+      "snake_head_analysis": "## 1. 任务分解\n\n1. 确定 `db` 参数类型（Connection 对象 / 文件路径 / 已有 cursor）\n2. 构造 SQL 查询，使用参数化查询防止注入\n3. 执行查询并获取结果\n4. 处理\"用户不存在\"和\"多条匹配\"两种边界情况\n5. 决定返回值格式（dict / tuple / sqlite3.Row / None）\n6. 异常处理与资源管理（连接是否需要关闭、由谁负责）\n\n## 2. 各步风险点\n\n- **db 参数类型不明确**：如果是 Connection 对象，函数内部不该关闭它（生命周期属于调用者）；如果是文件路径字符串，则每次调用都要开关连接，性能和并发行为不同。这是隐含假设，容易踩坑。\n- **SQL 注入**：若拼接字符串而非用 `?` 占位符，存在注入风险。必须用参数化查询。\n- **user_id 类型不确定**：整数还是字符串取决于表结构，类型不匹配可能导致查不到数据（sqlite 的类型系统是弱类型，但仍可能出问题）。\n- **表结构未知**：不知道表名、字段名，直接影响 SQL 语句的正确性。\n- **用户不存在**：`cursor.fetchone()` 返回 `None`，调用方若没处理会抛 `TypeError`。\n- **多行匹配**：如果 user_id 不是主键/唯一约束，可能匹配多行，用 `fetchone()` 会静默丢失数据。\n- **异常处理缺失**：`sqlite3.Error`（如数据库锁、文件损坏）未捕获会直接抛给上层，需要明确策略（捕获、记录日志、还是让上层处理）。\n- **多线程访问**：sqlite3 默认 `check_same_thread=True`，跨线程复用同一 connection 会报错，这是常见隐含坑。\n\n## 3. 不确定性标记（需要你确认）\n\n- `db` 到底是 `sqlite3.Connection` 对象，还是数据库文件路径？（下面代码假设是已建立的 Connection）\n- 表名和字段名是什么？（假设表名 `users`，字段 `id, username, email`）\n- 找不到用户时期望返回 `None` 还是抛异常？（假设返回 `None`）\n- user_id 是否保证唯一（主键）？\n\n基于以上假设，给出默认实现（可根据你的实际表结构调整）：\n\n```python\nimport sqlite3\n\ndef get_user(db: sqlite3.Connection, user_id: int) -> dict | None:\n    \"\"\"\n    根据 user_id 查询用户信息。\n\n    Args:\n        db: 已建立的 sqlite3.Connection 对象（由调用者管理生命周期）\n        user_id: 用户 ID\n\n    Returns:\n        用户信息字典，未找到返回 None\n    \"\"\"\n    db.row_factory = sqlite3.Row  # 支持按列名访问\n    try:\n        cursor = db.execute(\n            \"SELECT id, username, email FROM users WHERE id = ?\",\n            (user_id,)\n        )\n        row = cursor.fetchone()\n        return dict(row) if row else None\n    except sqlite3.Error as e:\n        # 具体日志/异常策略请按项目规范调整\n        raise RuntimeError(f\"查询用户失败: {e}\") from e\n```\n\n如果你能确认表结构和 `db` 参数类型，我可以把假设部分替换成准确实现。",
+      "judges": [
+        {
+          "name": "judge1",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: SQL注入漏洞。代码使用 f‑string 直接将 `user_id` 拼接到 SQL 语句中，未采用参数化查询（应使用 `?` 占位符并传递参数元组），攻击者可通过精心构造的 `user_id` 任意篡改 SQL 逻辑，导致数据泄露或破坏。  \nBug 2: 无异常处理。数据库操作（如连接异常、锁、损坏）会直接抛出 `sqlite3.Error` 导致程序崩溃，缺失资源保护和错误日志。  \nBug 3: 多行匹配风险未处理。若 `user_id` 在表中没有唯一约束，`fetchone()` 仅返回第一行，后续匹配行静默丢失，数据完整性受损。  \nBug 4: 返回值类型不明确。直接返回 `sqlite3` 原生的 `tuple` 或 `None`，未将结果转为字典等结构化形式，调用方无法按列名访问，且未遵循蛇头分析中的 `dict | None` 约定。  \n\n以上任一缺陷均足以判定代码不可上线，尤其 SQL 注入为高危风险。",
+          "tokens": 1674,
+          "success": true
+        },
+        {
+          "name": "judge2",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: SQL注入漏洞。使用f-string直接拼接user_id到SQL语句，未采用参数化查询（?占位符），攻击者可构造恶意user_id篡改SQL逻辑。\nBug 2: 缺乏异常处理。数据库操作可能抛出sqlite3.Error，代码未捕获，导致调用者收到原始异常，不利于错误隔离和日志记录。\nBug 3: 返回值类型不可预期。未设置row_factory，cursor.fetchone()返回元组而不是字典；蛇头分析预期返回dict或None，此处返回元组或None，造成接口不一致。\nBug 4: 未处理“用户不存在”时的返回值。尽管fetchone()可能返回None，但代码未明确告知调用者如何处理，且返回None与蛇头分析中的dict|None约定不符（返回类型未变为dict）。\nBug 5: 多行匹配风险。若user_id不是主键/唯一键，fetchone()仅返回第一条，可能静默丢失数据，代码未检查是否有多条记录。\nBug 6: 隐式依赖db参数类型。代码假定db具有cursor()方法（即sqlite3.Connection），若传入文件路径字符串则会抛出AttributeError，缺少类型检查或明确约定。",
+          "tokens": 1472,
+          "success": true
+        },
+        {
+          "name": "judge3",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\n结合蛇头风险分析，审查【蛇身代码】如下：\n\n---\n\n### 审查意见与 Bug 列表\n\n**Bug 1：严重 SQL 注入漏洞（SQL Injection）**\n* **代码代码段**：`cursor.execute(f\"SELECT * FROM users WHERE id = {user_id}\")`\n* **问题分析**：代码使用了 Python 的 f-string 字符串插值来拼接 SQL 语句。如果 `user_id` 来自外部不可信输入（例如字符串 `'1 OR 1=1'`），攻击者可以绕过逻辑或执行恶意 SQL 命令。\n* **修复建议**：必须使用参数化查询，将变量作为元组传给占位符 `?`：\n  ```python\n  cursor.execute(\"SELECT * FROM users WHERE id = ?\", (user_id,))\n  ```\n\n**Bug 2：游标资源未显式释放 / 缺乏上下文管理**\n* **代码代码段**：`cursor = db.cursor()`\n* **问题分析**：创建了 `cursor` 对象，但在函数结束时未调用 `cursor.close()`，也没有使用 `with` 上下文管理器。在长生命周期应用或高并发场景下，可能导致资源泄漏。\n* **修复建议**：使用上下文管理器或显式关闭游标，或者直接使用 `db.execute(...)`。\n\n**Bug 3：缺乏异常处理机制**\n* **代码代码段**：整个函数体\n* **问题分析**：当数据库出现异常（如表 `users` 不存在、数据库文件损坏或被锁定）时，未捕获 `sqlite3.Error`，会导致底层数据库异常直接抛出并中断上层业务逻辑。\n* **修复建议**：增加 `try-except sqlite3.Error` 模块，根据项目规范进行日志记录或格式化抛出。\n\n**Bug 4：数据结构返回格式未标准化**\n* **代码代码段**：`return cursor.fetchone()`\n* **问题分析**：默认情况下 `fetchone()` 返回的是一个无名元组 `(col1, col2, ...)`，在前端或上层代码调用时可读性差且依赖字段顺序。若表结构发生变更（如新增字段），上层代码极易崩溃。\n* **修复建议**：设置 `db.row_factory = sqlite3.Row` 并将结果转为 `dict` 返回，或明确指定查询列名（避免使用 `SELECT *`）。\n\n---\n\n### 推荐修复后的代码\n\n```python\nimport sqlite3\n\ndef get_user(db: sqlite3.Connection, user_id: int) -> dict | None:\n    \"\"\"\n    安全地根据 user_id 查询用户信息。\n    \"\"\"\n    db.row_factory = sqlite3.Row\n    try:\n        # 使用参数化查询防止 SQL 注入\n        cursor = db.execute(\"SELECT id, username, email FROM users WHERE id = ?\", (user_id,))\n        row = cursor.fetchone()\n        return dict(row) if row else None\n    except sqlite3.Error as e:\n        # 可根据实际情况记录日志或向上抛出自定义异常\n        raise RuntimeError(f\"数据库查询失败: {e}\") from e\n```",
+          "tokens": 2307,
+          "success": true
+        }
+      ],
+      "votes": {
+        "PASS": 0,
+        "FAIL": 3
+      },
+      "deep_dive": null,
+      "final_verdict": "FAIL",
+      "correct": true,
+      "total_tokens": 6864
+    },
+    {
+      "id": "S1",
+      "error_type": "L2: premise error",
+      "ground_truth": "FAIL",
+      "task": "写一个函数 split_bill(total, people)，将账单（total分）平分给每个人。total是整数，people是名字列表。返回{名字: 金额}字典。",
+      "code": "def split_bill(total, people):\n    avg = total // len(people)\n    return {p: avg for p in people}",
+      "snake_head_analysis": "## 1. 任务分解\n\n1. **输入校验**：检查 `total` 类型、`people` 非空、名字唯一性\n2. **计算基础分摊**：`base = total // len(people)`\n3. **计算余数**：`remainder = total % len(people)`（多出的、无法整除的“分”）\n4. **余数分配**：按某种规则把 `remainder` 分给部分人，让每人多1分\n5. **组装结果字典**：`{name: amount}`\n6. **一致性校验**（建议内置或用单测保证）：`sum(结果.values()) == total`\n\n参考实现：\n\n```python\ndef split_bill(total: int, people: list[str]) -> dict[str, int]:\n    if not isinstance(total, int):\n        raise TypeError(\"total 必须是整数（单位：分）\")\n    if not people:\n        raise ValueError(\"people 不能为空\")\n    if len(set(people)) != len(people):\n        raise ValueError(\"people 中存在重复姓名，无法用姓名作为字典键唯一标识\")\n\n    n = len(people)\n    base = total // n\n    remainder = total % n  # Python 下恒有 0 <= remainder < n，且对负数 total 同样成立\n\n    result = {}\n    for i, name in enumerate(people):\n        result[name] = base + (1 if i < remainder else 0)\n\n    assert sum(result.values()) == total  # 防止“钱凭空消失或多出”\n    return result\n```\n\n## 2. 每步风险点\n\n| 步骤 | 风险点 |\n|---|---|\n| 输入校验 | `people` 为空导致除零；重复姓名导致字典覆盖，实际会少算一份钱但不报错（隐藏bug，最危险） |\n| 基础分摊 | 若 `total` 是 float 而非 int，`//` 语义会模糊，破坏“分是最小单位”的假设 |\n| 余数计算 | 需验证负数场景（退款）：Python 的 `%` 对负数取余符号跟随除数，需确认 `base*n + remainder == total` 恒成立（已验证成立，可放心用） |\n| 余数分配 | “谁多拿1分”没有技术上的唯一答案，纯业务决策；当前实现按列表顺序前几位多拿，隐含假设“列表顺序=优先级”，多次结账场景可能造成同一批人反复多付 |\n| 结果组装 | 若姓名允许重复但业务上需要保留“同名不同人”，字典结构本身就不满足需求，需要换成 list of (name, amount) |\n| 一致性校验 | 若不做这步，除法/取余写错很难被发现（比如漏加 remainder），建议保留 assert 或对应单测 |\n\n## 3. 不确定性标记（需要与需求方确认）\n\n- ⚠️ **余数分配规则未定义**：多出的“分”给谁，是否有业务偏好（按签单人优先、字母序、随机、轮转公平）\n- ⚠️ **重复姓名处理策略未定义**：抛异常 / 自动加序号区分 / 允许覆盖，三种行为差异很大\n- ⚠️ **negative total（退款场景）是否合法输入**：若不合法应提前校验拒绝，而不是依赖数学恒等式“恰好也能跑”\n- ⚠️ **空列表行为**：抛异常还是返回 `{}`，取决于调用方期望\n\n这几点建议在写单测前先跟你确认，避免实现和需求脱节。",
+      "judges": [
+        {
+          "name": "judge1",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: 余数完全丢失 —— 当 `total % len(people) != 0` 时，整除部分 `avg` 直接丢弃了余数，导致 `sum(结果字典.values()) != total`，违背“总金额分毫不差”的核心要求。蛇头分析中明确标记了“余数分配”步骤和“一致性校验”，本实现完全缺失。",
+          "tokens": 1188,
+          "success": true
+        },
+        {
+          "name": "judge2",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: **余数丢失导致金额守恒破坏**  \n计算 `avg = total // len(people)` 直接丢弃了 `total % len(people)` 的余数，最终返回的字典总金额为 `avg * len(people)`，必然 ≤ `total`，且当 `total` 不能被整除时严格小于 `total`——即“钱凭空消失”。蛇头分析已明确指出必须处理余数分配，否则一致性不成立。\n\nBug 2: **空列表导致除零崩溃**  \n代码对 `people` 为空无任何保护，`len(people) == 0` 时 `total // 0` 会抛出 `ZeroDivisionError`。蛇头风险地图已标记此点，应按业务约定抛 `ValueError` 或返回空字典。\n\nBug 3: **重复姓名导致金额错误且无感知**  \n若 `people` 中存在重名，字典推导式会静默覆盖同名键，导致部分人应得的份额实际上未计入结果，返回值人数少于输入、总金额降低，且不报错。蛇头分析将此列为“最危险的隐藏bug”，此处完全忽视。\n\nBug 4: **类型假设无防护**  \n函数签名未强制 `total` 为 `int`。若传入 `float`，`//` 会返回 `float`，破坏“分是最小单位”的假设，且余数逻辑更模糊；代码未做防御，不符合蛇头风险建议。",
+          "tokens": 1488,
+          "success": true
+        },
+        {
+          "name": "judge3",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\n代码存在严重的逻辑漏洞和边界缺陷，审查结果如下：\n\n### Bug 1: 空列表导致除零异常（ZeroDivisionError）\n* **涉及行**：第 2 行 `avg = total // len(people)`\n* **风险点对应**：输入校验 / 基础分摊\n* **漏洞分析**：未对输入参数 `people` 进行非空校验。当 `people = []` 时，`len(people)` 为 `0`，程序在第 2 行直接抛出 `ZeroDivisionError` 异常崩溃。\n\n### Bug 2: 忽略余数导致账单总金额不一致（凭空丢钱）\n* **涉及行**：第 2 行及第 3 行\n* **风险点对应**：余数计算 / 余数分配 / 一致性校验\n* **漏洞分析**：仅使用整除 `total // len(people)`，丢弃了余数 `total % len(people)`。\n  * **示例**：`split_bill(100, ['A', 'B', 'C'])` 中，`100 // 3 = 33`，返回 `{'A': 33, 'B': 33, 'C': 33}`。\n  * **结果**：返回金额之和为 $33 \\times 3 = 99$，导致 1 分钱凭空消失，违背了 `sum(result.values()) == total` 的基本业务守恒约束。\n\n### Bug 3: 重复姓名导致字典键覆盖（钱数缺失且隐藏 Bug）\n* **涉及行**：第 3 行 `return {p: avg for p in people}`\n* **风险点对应**：输入校验 / 结果组装\n* **漏洞分析**：未校验 `people` 中名字的唯一性。在字典推导式中，若列表中存在同名者，后续的键值对会直接覆盖先前的键值对。\n  * **示例**：`split_bill(300, ['Alice', 'Alice', 'Bob'])`，`avg = 100`。\n  * **结果**：字典推导式返回 `{'Alice': 100, 'Bob': 100}`。账单总额从 300 变成 200，实际少收了一份钱，且不会触发任何 Python 运行时报错，属于最危险的静默 Bug。\n\n---\n\n### 补充说明（隐患）\n代码未对 `total` 的类型进行校验。若传入 `float` 类型（如 `10.0`），`10.0 // 2` 会返回浮点数 `5.0`，破坏了“分”作为最小整数单位的假设。",
+          "tokens": 2808,
+          "success": true
+        }
+      ],
+      "votes": {
+        "PASS": 0,
+        "FAIL": 3
+      },
+      "deep_dive": null,
+      "final_verdict": "FAIL",
+      "correct": true,
+      "total_tokens": 8196
+    },
+    {
+      "id": "S2",
+      "error_type": "L3: numerical stability",
+      "ground_truth": "FAIL",
+      "task": "写一个函数 compute_variance(data)，计算总体方差。",
+      "code": "def compute_variance(data):\n    n = len(data)\n    sum_x = sum(data)\n    sum_x2 = sum(x*x for x in data)\n    return (sum_x2 - sum_x * sum_x / n) / n",
+      "snake_head_analysis": "## 任务分解\n\n1. **函数签名与输入接受**：定义 `compute_variance(data)`，接受一个数值序列（list/tuple/迭代器）。\n2. **输入校验**：检查 `data` 非空、元素均为数值类型。\n3. **计算均值**：`mean = sum(data) / n`。\n4. **计算总体方差**：`variance = sum((x - mean) ** 2 for x in data) / n`（注意分母是 `n`，不是 `n - 1`，这是总体方差与样本方差的关键区别）。\n5. **返回结果**：返回 `variance`（float）。\n\n## 每步风险点\n\n| 步骤 | 风险点 |\n|---|---|\n| 输入接受 | 若传入生成器（一次性迭代器），`",
+      "judges": [
+        {
+          "name": "judge1",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\nBug 1: 代码不支持传入一次性迭代器（生成器）。若 `data` 为迭代器，`sum(data)` 会完全消耗该迭代器，导致下一行 `sum(x*x for x in data)` 遍历为空，计算结果错误（得到 `- (sum_x * sum_x / n) / n`）。同时，若迭代器无 `len()` 方法，`n = len(data)` 会抛出 `TypeError`，与蛇头分析中“若传入生成器（一次性迭代器）”的风险点相符。\nBug 2: 缺少输入校验。未检查 `data` 是否为空（会引发除零错误或 `len` 报错）以及元素是否均为数值类型，不符合蛇头分析中“输入校验”步骤的要求。",
+          "tokens": 924,
+          "success": true
+        },
+        {
+          "name": "judge2",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: 未对输入进行非空校验，当 data 为空列表（或空迭代器）时，n = 0，导致除零错误，违背了蛇头分析中“输入校验”的要求。\nBug 2: 未处理生成器等一次性迭代器。对于生成器对象，len(data) 会抛出 TypeError；对于其他迭代器，即使能获取长度，sum(data) 会消耗迭代器，导致后续 sum(x*x for x in data) 无法获得正确数据，计算结果错误。这与蛇头分析风险点表格中“若传入生成器（一次性迭代器）”指出的风险完全相符。",
+          "tokens": 1017,
+          "success": true
+        },
+        {
+          "name": "judge3",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\n结合蛇头分析的风险地图，逐行审查结果如下：\n\n**Bug 1: 无法支持生成器/迭代器类型输入**\n*   **代码位置**：第 2 行 `n = len(data)` 及 第 3、4 行对 `data` 的多次遍历\n*   **分析**：蛇头分析指出输入可能是迭代器/生成器。若传入生成器，第 2 行 `len(data)` 会直接抛出 `TypeError: object of type 'generator' has no len()`；即使规避了 `len()`，第 3 行 `sum(data)` 也会耗尽生成器，导致第 4 行 `sum_x2` 计算结果不正确（得到 0）。\n\n**Bug 2: 未处理空数据导致除零异常 (ZeroDivisionError)**\n*   **代码位置**：第 2 行 `n = len(data)` 及 第 5 行 `... / n`\n*   **分析**：蛇头分析强调了需检查输入非空。当 `data` 为空（如 `[]`）时，`n = 0`，第 5 行进行除法运算时会直接触发 `ZeroDivisionError` 崩溃。\n\n**Bug 3: 缺少类型校验与防错**\n*   **代码位置**：全函数\n*   **分析**：未对 `data` 中的元素进行数值类型校验。若传入包含字符串或非数值对象的列表，代码会在 `sum(data)` 或 `x * x` 处报错，健壮性不足。\n\n**Bug 4: 存在浮点数灾难性消去风险（数值稳定性问题）**\n*   **代码位置**：第 5 行 `(sum_x2 - sum_x * sum_x / n) / n`\n*   **分析**：采用了展开公式 $\\sum x^2 - (\\sum x)^2/n$ 计算方差。当数据集中数值极大（例如 `[100000001, 100000002]`）但方差较小时，`sum_x2` 与 `sum_x^2 / n` 非常接近，相减会导致浮点数精度丢失（灾难性消去），计算出错误的方差甚至负数方差。应优先采用蛇头建议的离差平方和方式 `sum((x - mean) ** 2 for x in data) / n` 或 Welford 算法。",
+          "tokens": 2411,
+          "success": true
+        }
+      ],
+      "votes": {
+        "PASS": 0,
+        "FAIL": 3
+      },
+      "deep_dive": null,
+      "final_verdict": "FAIL",
+      "correct": true,
+      "total_tokens": 4774
+    }
+  ]
+}

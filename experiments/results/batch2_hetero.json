@@ -1,0 +1,168 @@
+[
+  {
+    "case": "case7",
+    "error_type": "L2: resource leak / missing-cleanup",
+    "config": "v0.3-hetero",
+    "votes": [
+      "FAIL",
+      "FAIL",
+      "FAIL"
+    ],
+    "fail_count": 3,
+    "final_verdict": "FAIL",
+    "ground_truth": "FAIL",
+    "correct": true,
+    "total_tokens": 3160,
+    "total_latency": 37.8,
+    "deep_dive": null,
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.3,
+        "verdict": "FAIL",
+        "tokens": 1095,
+        "latency": 19.3
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.7,
+        "verdict": "FAIL",
+        "tokens": 676,
+        "latency": 12.9
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "temp": 0.3,
+        "verdict": "FAIL",
+        "tokens": 1389,
+        "latency": 5.6
+      }
+    ]
+  },
+  {
+    "case": "case8",
+    "error_type": "L1: logic error / variable-shadowing",
+    "config": "v0.3-hetero",
+    "votes": [
+      "PASS",
+      "PASS",
+      "PASS"
+    ],
+    "fail_count": 0,
+    "final_verdict": "PASS",
+    "ground_truth": "FAIL",
+    "correct": false,
+    "total_tokens": 3700,
+    "total_latency": 32.1,
+    "deep_dive": null,
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.3,
+        "verdict": "PASS",
+        "tokens": 679,
+        "latency": 12.3
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.7,
+        "verdict": "PASS",
+        "tokens": 690,
+        "latency": 12.1
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "temp": 0.3,
+        "verdict": "PASS",
+        "tokens": 2331,
+        "latency": 7.6
+      }
+    ]
+  },
+  {
+    "case": "S2",
+    "error_type": "L3: domain knowledge / numerical stability",
+    "config": "v0.3-hetero",
+    "votes": [
+      "PASS",
+      "FAIL",
+      "FAIL"
+    ],
+    "fail_count": 2,
+    "final_verdict": "FAIL",
+    "ground_truth": "FAIL",
+    "correct": true,
+    "total_tokens": 5928,
+    "total_latency": 70.3,
+    "deep_dive": {
+      "valid": false,
+      "tokens": 951
+    },
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.3,
+        "verdict": "PASS",
+        "tokens": 1633,
+        "latency": 31.5
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.7,
+        "verdict": "FAIL",
+        "tokens": 948,
+        "latency": 15.5
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "temp": 0.3,
+        "verdict": "FAIL",
+        "tokens": 2396,
+        "latency": 6.9
+      }
+    ]
+  },
+  {
+    "case": "S3",
+    "error_type": "L4: subjective / code quality",
+    "config": "v0.3-hetero",
+    "votes": [
+      "PASS",
+      "PASS",
+      "FAIL"
+    ],
+    "fail_count": 1,
+    "final_verdict": "FAIL",
+    "ground_truth": "PASS",
+    "correct": false,
+    "total_tokens": 7442,
+    "total_latency": 82.5,
+    "deep_dive": {
+      "valid": true,
+      "tokens": 1603
+    },
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.3,
+        "verdict": "PASS",
+        "tokens": 1715,
+        "latency": 30.9
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "temp": 0.7,
+        "verdict": "PASS",
+        "tokens": 1715,
+        "latency": 28.5
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "temp": 0.3,
+        "verdict": "FAIL",
+        "tokens": 2409,
+        "latency": 7.2
+      }
+    ]
+  }
+]

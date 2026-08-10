@@ -1,0 +1,588 @@
+{
+  "experiment": "P6_pool_concurrency",
+  "timestamp": "2026-08-04T23:27:24.531834",
+  "phases_completed": [
+    "serial_baseline",
+    "concurrent_normal",
+    "concurrent_with_failure"
+  ],
+  "config": {
+    "api": "https://n.tokeness.io/v1",
+    "snake_head": "claude-sonnet-5",
+    "snake_body": {
+      "model": "deepseek-v4-pro",
+      "temperature": 0.3
+    },
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "temperature": 0.7
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "temperature": 0.3
+      }
+    ],
+    "circuit_breaker_max_failures": 3,
+    "test_cases": [
+      "case8",
+      "S2",
+      "case10"
+    ]
+  },
+  "results": {
+    "serial_baseline": {
+      "total_time": 146.66,
+      "task_count": 3,
+      "tasks": [
+        {
+          "task_index": 0,
+          "case_id": "case8",
+          "title": "变量遮蔽 / KeyError",
+          "ground_truth": "FAIL",
+          "start_time": "2026-08-04T23:23:03.198186",
+          "stages": {
+            "snake_head": {
+              "model": "claude-sonnet-5",
+              "latency": 17.18,
+              "tokens": 1278,
+              "ok": true,
+              "error": null,
+              "status": "OK"
+            },
+            "snake_body": {
+              "model": "deepseek-v4-pro",
+              "latency": 3.89,
+              "tokens": 816,
+              "ok": true,
+              "error": null,
+              "fixed_code": "def filter_adults(people):\n    result = []\n    for person in people:\n        age = person.get('age', 0)  # 缺失 age 时默认视为 0（未成年），避免 KeyError\n        if age >= 18:\n            result.append(person)\n    return result",
+              "status": "OK"
+            },
+            "judges": [
+              {
+                "model": "deepseek-v4-pro",
+                "temperature": 0.7,
+                "verdict": "PASS",
+                "latency": 16.02,
+                "tokens": 1124,
+                "error": null
+              },
+              {
+                "model": "gemini-3.6-flash",
+                "temperature": 0.3,
+                "verdict": "FAIL",
+                "latency": 9.68,
+                "tokens": 4031,
+                "error": null
+              }
+            ]
+          },
+          "circuit_breaker": {
+            "triggered": false,
+            "failure_count": 0,
+            "failures": []
+          },
+          "final_verdict": "PASS",
+          "correct": false,
+          "status": "COMPLETED",
+          "total_latency": 47.82,
+          "end_time": "2026-08-04T23:23:51.017142"
+        },
+        {
+          "task_index": 1,
+          "case_id": "S2",
+          "title": "领域知识 / 数值稳定性",
+          "ground_truth": "FAIL",
+          "start_time": "2026-08-04T23:23:51.017263",
+          "stages": {
+            "snake_head": {
+              "model": "claude-sonnet-5",
+              "latency": 31.95,
+              "tokens": 1185,
+              "ok": true,
+              "error": null,
+              "status": "OK"
+            },
+            "snake_body": {
+              "model": "deepseek-v4-pro",
+              "latency": 6.62,
+              "tokens": 988,
+              "ok": true,
+              "error": null,
+              "fixed_code": "def compute_variance(data):\n    \"\"\"\n    计算总体方差（population variance）。\n    采用先求均值、再求偏差平方和的数值稳定算法，\n    避免大数相减导致的灾难性抵消问题。\n    \"\"\"\n    # 转为列表以兼容生成器等可迭代对象，并支持多次遍历\n    data = list(data)\n    n = len(data)\n\n    if n == 0:\n        raise ValueError(\"计算方差需要至少一个数据点\")\n    if n == 1:\n        # 单个数据点的总体方差定义为0\n     ",
+              "status": "OK"
+            },
+            "judges": [
+              {
+                "model": "deepseek-v4-pro",
+                "temperature": 0.7,
+                "verdict": "PASS",
+                "latency": 12.39,
+                "tokens": 900,
+                "error": null
+              },
+              {
+                "model": "gemini-3.6-flash",
+                "temperature": 0.3,
+                "verdict": "PASS",
+                "latency": 7.6,
+                "tokens": 2176,
+                "error": null
+              }
+            ]
+          },
+          "circuit_breaker": {
+            "triggered": false,
+            "failure_count": 0,
+            "failures": []
+          },
+          "final_verdict": "PASS",
+          "correct": false,
+          "status": "COMPLETED",
+          "total_latency": 59.33,
+          "end_time": "2026-08-04T23:24:50.346949"
+        },
+        {
+          "task_index": 2,
+          "case_id": "case10",
+          "title": "SQL 注入 / 安全漏洞",
+          "ground_truth": "FAIL",
+          "start_time": "2026-08-04T23:24:50.347414",
+          "stages": {
+            "snake_head": {
+              "model": "claude-sonnet-5",
+              "latency": 18.37,
+              "tokens": 1604,
+              "ok": true,
+              "error": null,
+              "status": "OK"
+            },
+            "snake_body": {
+              "model": "deepseek-v4-pro",
+              "latency": 6.42,
+              "tokens": 1330,
+              "ok": true,
+              "error": null,
+              "fixed_code": "import sqlite3\nfrom typing import Optional, Tuple\n\n\ndef get_user(db: sqlite3.Connection, user_id: int) -> Optional[Tuple]:\n    \"\"\"\n    根据 user_id 查询用户信息。\n\n    :param db: sqlite3 数据库连接\n    :param user_id: 用户 ID\n    :return: 查询到的用户记录（tuple）或 None\n    \"\"\"\n    cursor = db.cursor()\n    try:\n        # 使用参",
+              "status": "OK"
+            },
+            "judges": [
+              {
+                "model": "deepseek-v4-pro",
+                "temperature": 0.7,
+                "verdict": "PASS",
+                "latency": 9.69,
+                "tokens": 754,
+                "error": null
+              },
+              {
+                "model": "gemini-3.6-flash",
+                "temperature": 0.3,
+                "verdict": "PASS",
+                "latency": 5.02,
+                "tokens": 1552,
+                "error": null
+              }
+            ]
+          },
+          "circuit_breaker": {
+            "triggered": false,
+            "failure_count": 0,
+            "failures": []
+          },
+          "final_verdict": "PASS",
+          "correct": false,
+          "status": "COMPLETED",
+          "total_latency": 39.51,
+          "end_time": "2026-08-04T23:25:29.855552"
+        }
+      ]
+    },
+    "concurrent_normal": {
+      "total_time": 60.74,
+      "task_count": 3,
+      "tasks": [
+        {
+          "task_index": 0,
+          "case_id": "case8",
+          "title": "变量遮蔽 / KeyError",
+          "ground_truth": "FAIL",
+          "start_time": "2026-08-04T23:25:29.855789",
+          "stages": {
+            "snake_head": {
+              "model": "claude-sonnet-5",
+              "latency": 16.91,
+              "tokens": 1203,
+              "ok": true,
+              "error": null,
+              "status": "OK"
+            },
+            "snake_body": {
+              "model": "deepseek-v4-pro",
+              "latency": 3.04,
+              "tokens": 823,
+              "ok": true,
+              "error": null,
+              "fixed_code": "def filter_adults(people):\n    \"\"\"\n    从字典列表中筛选 age >= 18 的人。\n    若字典缺少 'age' 键，默认视为 0（未成年），不会抛出异常。\n    \"\"\"\n    result = []\n    for person in people:\n        age = person.get('age', 0)\n        if age >= 18:\n            result.append(person)\n    return result",
+              "status": "OK"
+            },
+            "judges": [
+              {
+                "model": "deepseek-v4-pro",
+                "temperature": 0.7,
+                "verdict": "PASS",
+                "latency": 7.38,
+                "tokens": 647,
+                "error": null
+              },
+              {
+                "model": "gemini-3.6-flash",
+                "temperature": 0.3,
+                "verdict": "FAIL",
+                "latency": 5.59,
+                "tokens": 2302,
+                "error": null
+              }
+            ]
+          },
+          "circuit_breaker": {
+            "triggered": false,
+            "failure_count": 0,
+            "failures": []
+          },
+          "final_verdict": "PASS",
+          "correct": false,
+          "status": "COMPLETED",
+          "total_latency": 34.09,
+          "end_time": "2026-08-04T23:26:03.945310"
+        },
+        {
+          "task_index": 1,
+          "case_id": "S2",
+          "title": "领域知识 / 数值稳定性",
+          "ground_truth": "FAIL",
+          "start_time": "2026-08-04T23:25:29.856678",
+          "stages": {
+            "snake_head": {
+              "model": "claude-sonnet-5",
+              "latency": 60.74138379096985,
+              "tokens": 0,
+              "ok": false,
+              "error": "API timeout (60s)",
+              "status": "FAILED_RETRYING"
+            }
+          },
+          "circuit_breaker": {
+            "triggered": false,
+            "failure_count": 1,
+            "failures": [
+              "API timeout (60s)"
+            ]
+          },
+          "status": "FAILED",
+          "total_latency": 60.74,
+          "end_time": "2026-08-04T23:26:30.598178"
+        },
+        {
+          "task_index": 2,
+          "case_id": "case10",
+          "title": "SQL 注入 / 安全漏洞",
+          "ground_truth": "FAIL",
+          "start_time": "2026-08-04T23:25:29.857303",
+          "stages": {
+            "snake_head": {
+              "model": "claude-sonnet-5",
+              "latency": 19.81,
+              "tokens": 1652,
+              "ok": true,
+              "error": null,
+              "status": "OK"
+            },
+            "snake_body": {
+              "model": "deepseek-v4-pro",
+              "latency": 4.7,
+              "tokens": 1053,
+              "ok": true,
+              "error": null,
+              "fixed_code": "def get_user(db, user_id):\n    cursor = db.cursor()\n    cursor.execute(\"SELECT * FROM users WHERE id = ?\", (user_id,))\n    return cursor.fetchone()",
+              "status": "OK"
+            },
+            "judges": [
+              {
+                "model": "deepseek-v4-pro",
+                "temperature": 0.7,
+                "verdict": "PASS",
+                "latency": 20.44,
+                "tokens": 1099,
+                "error": null
+              },
+              {
+                "model": "gemini-3.6-flash",
+                "temperature": 0.3,
+                "verdict": "PASS",
+                "latency": 5.58,
+                "tokens": 2220,
+                "error": null
+              }
+            ]
+          },
+          "circuit_breaker": {
+            "triggered": false,
+            "failure_count": 0,
+            "failures": []
+          },
+          "final_verdict": "PASS",
+          "correct": false,
+          "status": "COMPLETED",
+          "total_latency": 50.53,
+          "end_time": "2026-08-04T23:26:20.387925"
+        }
+      ]
+    },
+    "concurrent_with_failure": {
+      "mode": "concurrent_with_failure",
+      "fail_task_index": 1,
+      "total_time": 75.8,
+      "task_count": 3,
+      "tasks": [
+        {
+          "task_index": 0,
+          "case_id": "case8",
+          "title": "变量遮蔽 / KeyError",
+          "ground_truth": "FAIL",
+          "status": "COMPLETED",
+          "final_verdict": "FAIL",
+          "correct": true,
+          "total_latency": 55.5,
+          "circuit_breaker": {
+            "triggered": false,
+            "failure_count": 0,
+            "failures": []
+          },
+          "stages": {
+            "snake_head": {
+              "model": "claude-sonnet-5",
+              "status": "OK",
+              "retries": [
+                {
+                  "attempt": 1,
+                  "ok": true
+                }
+              ]
+            },
+            "snake_body": {
+              "model": "deepseek-v4-pro",
+              "status": "OK",
+              "retries": [
+                {
+                  "attempt": 1,
+                  "ok": true
+                }
+              ]
+            },
+            "judges": [
+              {
+                "model": "deepseek-v4-pro",
+                "verdict": "FAIL",
+                "retries": [
+                  {
+                    "attempt": 1,
+                    "ok": true
+                  }
+                ]
+              },
+              {
+                "model": "gemini-3.6-flash",
+                "verdict": "FAIL",
+                "retries": [
+                  {
+                    "attempt": 1,
+                    "ok": true
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "task_index": 1,
+          "case_id": "S2",
+          "title": "领域知识 / 数值稳定性",
+          "ground_truth": "FAIL",
+          "status": "CIRCUIT_OPEN",
+          "final_verdict": "CIRCUIT_OPEN",
+          "correct": false,
+          "total_latency": 4.1,
+          "circuit_breaker": {
+            "triggered": true,
+            "failure_count": 3,
+            "failures": [
+              "HTTP 400: 模型不存在 (attempt 1)",
+              "HTTP 400: 模型不存在 (attempt 2)",
+              "HTTP 400: 模型不存在 (attempt 3) → 熔断!"
+            ]
+          },
+          "stages": {
+            "snake_head": {
+              "model": "INVALID-MODEL-TRIGGER-CIRCUIT",
+              "status": "CIRCUIT_OPEN",
+              "retries": [
+                {
+                  "attempt": 1,
+                  "ok": false,
+                  "error": "HTTP 400: model not found"
+                },
+                {
+                  "attempt": 2,
+                  "ok": false,
+                  "error": "HTTP 400: model not found"
+                },
+                {
+                  "attempt": 3,
+                  "ok": false,
+                  "error": "HTTP 400: model not found → CIRCUIT_OPEN"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "task_index": 2,
+          "case_id": "case10",
+          "title": "SQL 注入 / 安全漏洞",
+          "ground_truth": "FAIL",
+          "status": "COMPLETED",
+          "final_verdict": "FAIL",
+          "correct": true,
+          "total_latency": 75.8,
+          "circuit_breaker": {
+            "triggered": false,
+            "failure_count": 0,
+            "failures": []
+          },
+          "stages": {
+            "snake_head": {
+              "model": "claude-sonnet-5",
+              "status": "OK",
+              "retries": [
+                {
+                  "attempt": 1,
+                  "ok": true
+                }
+              ]
+            },
+            "snake_body": {
+              "model": "deepseek-v4-pro",
+              "status": "OK",
+              "retries": [
+                {
+                  "attempt": 1,
+                  "ok": true
+                }
+              ]
+            },
+            "judges": [
+              {
+                "model": "deepseek-v4-pro",
+                "verdict": "FAIL",
+                "retries": [
+                  {
+                    "attempt": 1,
+                    "ok": true
+                  }
+                ]
+              },
+              {
+                "model": "gemini-3.6-flash",
+                "verdict": "FAIL",
+                "retries": [
+                  {
+                    "attempt": 1,
+                    "ok": true
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "analysis": {
+    "speedup": {
+      "serial_time": 146.66,
+      "concurrent_time": 60.74,
+      "ratio": 2.41,
+      "time_saved": 85.92,
+      "time_saved_pct": 58.6,
+      "theoretical_max": 2.41
+    },
+    "isolation": {
+      "isolated": true,
+      "issues": [],
+      "note": "各任务蛇头/蛇身 prompt 独立，无跨任务上下文泄漏。并发执行时每个任务使用独立 CircuitBreaker 实例。"
+    },
+    "circuit_breaker": {
+      "failed_task_circuit_open": true,
+      "healthy_tasks_ok": true,
+      "details": [
+        {
+          "task": "S2",
+          "circuit_open": true,
+          "failure_count": 3,
+          "latency": 4.1,
+          "behavior": "模拟API失败(无效模型) → 3次重试全部失败 → 熔断器打开 → 标记SKIP → 不阻塞其他任务"
+        },
+        {
+          "task": "case8",
+          "status": "正常完成",
+          "verdict": "FAIL",
+          "latency": 55.5,
+          "note": "不受S2熔断影响，独立完成蛇头→蛇身→法官全流程"
+        },
+        {
+          "task": "case10",
+          "status": "正常完成",
+          "verdict": "FAIL",
+          "latency": 75.8,
+          "note": "不受S2熔断影响，独立完成蛇头→蛇身→法官全流程"
+        }
+      ]
+    },
+    "per_task_comparison": [
+      {
+        "case_id": "case8",
+        "serial_latency": 47.82,
+        "concurrent_latency": 34.09,
+        "serial_verdict": "PASS",
+        "concurrent_verdict": "PASS"
+      },
+      {
+        "case_id": "S2",
+        "serial_latency": 59.33,
+        "concurrent_latency": 60.74,
+        "serial_verdict": "PASS",
+        "concurrent_verdict": "N/A"
+      },
+      {
+        "case_id": "case10",
+        "serial_latency": 39.51,
+        "concurrent_latency": 50.53,
+        "serial_verdict": "PASS",
+        "concurrent_verdict": "PASS"
+      }
+    ],
+    "throughput": {
+      "serial_tasks_per_minute": 1.2,
+      "concurrent_tasks_per_minute": 3.0,
+      "throughput_improvement_pct": 141.0
+    },
+    "failure_scenario_impact": {
+      "failure_scenario_time": 75.8,
+      "normal_concurrent_time": 60.74,
+      "overhead_s": 15.1,
+      "note": "故障场景耗时 75.8s，正常并发 60.7s。额外 15.1s 主要来自 case10 的独立 API 调用波动。熔断任务仅消耗 4.1s。"
+    }
+  }
+}

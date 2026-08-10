@@ -1,0 +1,109 @@
+{
+  "experiment": "全链路异构对比实验",
+  "date": "2026-08-04",
+  "config": "蛇头分析(claude-sonnet-5) + 异构三法官(2xDeepSeek+Gemini) + 少数派深挖",
+  "results": {
+    "case1": {
+      "gt": "FAIL",
+      "judge_only": "FAIL",
+      "full_pipeline": "FAIL"
+    },
+    "case2": {
+      "gt": "FAIL",
+      "judge_only": "PASS",
+      "full_pipeline": "FAIL"
+    },
+    "case3": {
+      "gt": "PASS",
+      "judge_only": "PASS",
+      "full_pipeline": "PASS"
+    },
+    "case4": {
+      "gt": "FAIL",
+      "judge_only": "PASS",
+      "full_pipeline": "FAIL"
+    },
+    "case5": {
+      "gt": "FAIL",
+      "judge_only": "FAIL",
+      "full_pipeline": "FAIL"
+    },
+    "case6": {
+      "gt": "FAIL",
+      "judge_only": "FAIL",
+      "full_pipeline": "FAIL"
+    },
+    "case7": {
+      "gt": "FAIL",
+      "judge_only": "FAIL",
+      "full_pipeline": "FAIL"
+    },
+    "case8": {
+      "gt": "FAIL",
+      "judge_only": "PASS",
+      "full_pipeline": "FAIL"
+    },
+    "case9": {
+      "gt": "FAIL",
+      "judge_only": "FAIL",
+      "full_pipeline": "FAIL"
+    },
+    "case10": {
+      "gt": "FAIL",
+      "judge_only": "FAIL",
+      "full_pipeline": "FAIL"
+    },
+    "S1": {
+      "gt": "FAIL",
+      "judge_only": "PASS",
+      "full_pipeline": "FAIL"
+    },
+    "S2": {
+      "gt": "FAIL",
+      "judge_only": "FAIL",
+      "full_pipeline": "PASS"
+    },
+    "S3": {
+      "gt": "PASS",
+      "judge_only": "FAIL",
+      "full_pipeline": "PASS"
+    },
+    "S4": {
+      "gt": "PASS",
+      "judge_only": "FAIL",
+      "full_pipeline": "PASS"
+    },
+    "S5": {
+      "gt": "FAIL",
+      "judge_only": "FAIL",
+      "full_pipeline": "FAIL"
+    },
+    "S6": {
+      "gt": "FAIL",
+      "judge_only": "PASS",
+      "full_pipeline": "FAIL"
+    },
+    "S7": {
+      "gt": "FAIL",
+      "judge_only": "FAIL",
+      "full_pipeline": "FAIL"
+    }
+  },
+  "summary": {
+    "full_pipeline": "16/17 = 94%",
+    "judge_only": "10/17 = 59%",
+    "improvement": "+6 cases (+35%)",
+    "saved_cases": [
+      "case2",
+      "case4",
+      "case8",
+      "S1",
+      "S3",
+      "S4",
+      "S6"
+    ],
+    "remaining_failures": [
+      "S2"
+    ]
+  }
+}

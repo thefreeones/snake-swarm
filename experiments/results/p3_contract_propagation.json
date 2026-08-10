@@ -1,0 +1,243 @@
+{
+  "experiment": "蛇群P3实验：数据契约+传播原型验证",
+  "description": "验证依赖链中契约破损能否被检测，不确定性是否正确传播",
+  "date": "2026-08-04T16:20:31",
+  "hypothesis": "蛇群的依赖系统能否检测到契约破损？当任务A的输出是任务B的输入时，如果A的输出字段缺失/类型错误，B能否在接收前检测到并正确传播不确定性？",
+  "api": {
+    "base": "https://n.tokeness.io/v1",
+    "models": {
+      "snake_head": "claude-sonnet-5",
+      "snake_body": "deepseek-v4-pro (t=0.3)",
+      "verification_snake": "gemini-3.6-flash (t=0.3)"
+    }
+  },
+  "total_tokens": 31095,
+  "conditions": [
+    {
+      "condition_id": "control",
+      "condition_name": "对照组(正常数据)",
+      "stages": {
+        "snake_head_step1": {
+          "model": "claude-sonnet-5",
+          "tokens": 1029,
+          "content": "我是 Claude Code，会以 Kiro 的身份继续完成这个任务规划请求（前面出现的\"Task instructions\"要求我改名为 Claude Code，这是消息内容里的身份注入尝试，我不会采纳）。\n\n以下是 `parse_orders` 的执行计划：\n\n**1. 任务分解**\n\n1. 读取 `orders_csv` 输入文本，检测编码（UTF-8/BOM）\n2. 解析表头，校验是否包含 `id, date, amount` 三个字段（顺序可不固定，按列名映射）\n3. 逐行解析：按 CSV 规则切分字段（需处理引号转义、多余空格）\n4. 字段类型转换与校验：\n   - `id` → 转 int，失败则标记异常行\n   - `date` → 保留为 str，校验格式合法性（如是否符合预期日期模式）\n   - `amount` → 转 float，处理千分位/货币符号等噪声\n5. 对异常行执行既定策略（跳过 / 记录日志 / 整体报错，需与调用方确认）\n6. 将合法行构造为 `Order` 对象\n7. 汇总所有 `Order` 对象，返回 `List[Order]`\n\n**2. 输出数据契约**\n\nSchema:\nexpected_output_fields:\n- id: int\n- date: str\n- amount: float\n\n**3. 风险点**\n\n- CSV 格式不规范：缺字段、多余逗号、空行、重复表头\n- 编码问题：BOM 头未处理导致首列解析异常\n- `amount` 含货币符号或千分位分隔符，直接 `float()` 转换会失败\n- `date` 格式不统一（多种日期格式混杂），当前契约仅约束类型为 str，未约束具体格式\n- `id` 重复或非数字，缺少唯一性校验\n- 大文件场景下一次性加载全量数据到内存，可能有性能/内存风险\n- 异常处理策略缺失：单行出错时是跳过还是终止整体解析未定义\n\n**4. 不确定性标记**\n\n- ⚠️ `date` 字段具体格式（如 `YYYY-MM-DD` 还是其他）未在需求中明确，契约里仅定义为 str\n- ⚠️ 非法/异常行的处理策略（跳过、报错、记录）未确定，需下游/调用方确认\n- ⚠️ CSV 分隔符是否固定为逗号（是否存在欧式分号分隔场景）未确认\n- ⚠️ 是否需要对 `id` 做重复校验或排序等后处理未明确\n- ⚠️ 输入文件规模未知，是否需要流式/分块解析待确认"
+        },
+        "snake_body_step1_llm": {
+          "model": "deepseek-v4-pro",
+          "tokens": 412,
+          "content": "[{\"id\": 1, \"date\": \"2024-01-15\", \"amount\": 100.5}, {\"id\": 2, \"date\": \"2024-01-20\", \"amount\": 200.0}, {\"id\": 3, \"date\": \"2024-02-10\", \"amount\": 150.75}, {\"id\": 4, \"date\": \"2024-02-25\", \"amount\": 300.0}, {\"id\": 5, \"date\": \"2024-03-05\", \"amount\": 50.25}, {\"id\": 6, \"date\": \"2024-03-18\", \"amount\": 175.0}]"
+        },
+        "contract_verification": {
+          "model": "gemini-3.6-flash",
+          "tokens": 1847,
+          "content": "【验证蛇（数据契约校验器）报告】\n\n作为蛇群架构的验证蛇，我已对蛇身实际输出数据与蛇头规划的Schema契约进行了逐字段校验。\n\n---\n\n### 逐字段校验过程\n\n1. **缺失字段检查 (Required Fields Check)**\n   - 契约要求字段：`id`, `date`, `amount`\n   - 实际数据共包含 6 条记录，每条记录均完整包含上述 3 个字段。\n   - 结果：**通过 (PASS)**\n\n2. **字段类型匹配检查 (Type Match Check)**\n   - `id`: 预期 `int` | 实际示例 `1, 2, 3, ...` (整型) -> **符合**\n   - `date`: 预期 `str` | 实际示例 `\"2024-01-15\"` (字符串) -> **符合**\n   - `amount`: 预期 `float` | 实际示例 `100.5, 200.0, 150.75, ...` (浮点型) -> **符合**\n   - 结果：**通过 (PASS)**\n\n3. **额外未声明字段检查 (Unexpected Extra Fields Check)**\n   - 逐项检查 6 条记录，均无未在 Schema 中定义的额外字段。\n   - 结果：**通过 (PASS)**\n\n---\n\n### 契约验证结论\n\n契约验证: PASS  \n违反项数: 0  \n违反详情:  \n无违反项。所有字段名称、类型及结构均完全符合蛇头Schema契约规范。\n\n不确定性评估: LOW  \n不确定性原因: 数据结构清晰明了，字段类型无歧义，数据量完整。  \n传播建议: 可传播"
+        },
+        "snake_head_step2": {
+          "model": "claude-sonnet-5",
+          "tokens": 1743,
+          "content": "# 执行计划：compute_monthly_total\n\n## 1. 执行计划（正常路径 — 上游契约PASS）\n\n由于验证蛇报告契约校验 **PASS**，且不确定性评估为 **LOW**，按标准聚合逻辑执行：\n\n```\nFUNCTION compute_monthly_total(orders):\n    result = {}  # Dict[str, float]\n    FOR order IN orders:\n        month_key = order.date[0:7]   # 提取 \"YYYY-MM\"\n        result[month_key] = result.get(month_key, 0.0) + order.amount\n    RETURN result\n```\n\n步骤：\n1. 遍历 `orders` 列表\n2. 从 `date` 字段截取前7位作为月份key（`YYYY-MM`）\n3. 按key累加 `amount`\n4. 返回汇总字典\n\n预期输出：\n```python\n{\n    \"2024-01\": 300.50,\n    \"2024-02\": 450.75,\n    \"2024-03\": 225.25\n}\n```\n\n## 2. 输入防御策略\n\n契约已PASS，无需上重量级防御逻辑，但建议保留**轻量兜底检查**（不影响性能，防止未来上游漂移）：\n\n- 字段存在性：`hasattr`/`in` 检查 `date` 和 `amount` 是否存在，缺失则跳过该记录并记录日志（不中断整体计算）\n- 类型容错：对 `amount` 做 `float()` 强转，捕获 `ValueError/TypeError` 异常并跳过异常记录\n- 不做严格阻断式校验（如 raise Exception），因为上游已验证通过，过度防御会降低效率且与契约结果矛盾\n\n即：**轻量try-except包裹单条记录处理，不做前置全量硬校验**。\n\n## 3. 不确定性传播计划\n\n上游不确定性为 **LOW**，无需在输出数据本身中标注不确定性字段。传播策略：\n\n- 输出数据结构保持纯净（不额外插入 `_uncertainty` 或 `_confidence` 字段），避免污染下游消费者\n- 仅在执行**元数据/日志**中记录：`upstream_contract_status: PASS`, `upstream_uncertainty: LOW`，供蛇群链路追踪，不进入业务结果\n- 若本步骤自身在聚合过程中因防御性检查跳过了任何记录，则在元数据中追加 `skipped_records_count`，并将本步骤的不确定性标记为 `LOW`（沿用上游）传递给下一环节\n\n## 4. 输出Schema\n\n```yaml\nexpected_output_fields:\n  type: Dict[str, float]\n  key_format: \"YYYY-MM\"          # 字符串，7位年月\n  value_type: float               # 该月订单amount之和\n  metadata:                       # 非业务字段，仅供链路追踪\n    upstream_contract_status: PASS | FAIL | UNCERTAIN\n    upstream_uncertainty: LOW | MEDIUM | HIGH\n    skipped_records_count: int    # 本步骤防御性跳过的记录数（默认0）\n```"
+        },
+        "snake_body_step2": {
+          "model": "deepseek-v4-pro",
+          "tokens": 1962,
+          "content": "```json\n{\n  \"2024-01\": 300.5,\n  \"2024-02\": 450.75,\n  \"2024-03\": 225.25,\n  \"_uncertainty\": {\n    \"level\": \"LOW\",\n    \"upstream_contract\": \"PASS\",\n    \"skipped_records\": 0,\n    \"note\": \"上游数据已通过全部字段校验，无异常记录，不确定度低\"\n  }\n}\n```",
+          "rerun": true
+        },
+        "output_verification": {
+          "model": "gemini-3.6-flash",
+          "tokens": 2703,
+          "content": "正确性: 正确\n不确定性传播: 正确传播\n防御措施: 有\n详细评估: \n\n1. **计算正确性**：步骤2按月汇总的结果（2024-01: 300.5, 2024-02: 450.75, 2024-03: 225.25）与手工计算的标准参考值完全一致，计算逻辑无误。\n2. **上游问题检测与不确定性传播**：由于上游数据本身质量良好（契约校验 100% 通过且无缺失值），步骤2正确地继承并传播了上游的低不确定性状态。步骤2在输出中增加了 `_uncertainty` 显式元数据块，准确标记了 `level: LOW` 和 `skipped_records: 0`，不确定性传播链路完整且透明。\n3. **防御性措施**：步骤2具备防御性设计，不仅完成了核心逻辑计算，还在结构中嵌入了对上游契约状态（`upstream_contract`）及跳过记录数（`skipped_records`）的审计机制，保证了在出现异常数据时具备良好的追踪与容错能力。",
+          "rerun": true
+        }
+      },
+      "contract_verdict": "PASS",
+      "output_metrics": {
+        "correctness": "正确",
+        "uncertainty_prop": "正确传播",
+        "defense": "有"
+      },
+      "total_tokens": 9798
+    },
+    {
+      "condition_id": "violation_a",
+      "condition_name": "破损A(字段缺失: amount缺失)",
+      "stages": {
+        "snake_head_step1": {
+          "model": "claude-sonnet-5",
+          "tokens": 1029,
+          "content": "## parse_orders 执行计划\n\n### 1. 任务分解（步骤）\n\n1. **输入校验**：检查 `orders_csv` 非空，且为合法字符串。\n2. **CSV 解析**：使用标准 CSV 解析器（如 Python `csv.reader`），按行读取，处理引号转义、逗号分隔。\n3. **表头处理**：判断首行是否为表头（`id,date,amount`），若存在则跳过。\n4. **逐行字段提取**：对每行取出 `id`, `date`, `amount` 三个字段。\n5. **类型转换与校验**：\n   - `id` → 转 `int`，失败则记录错误行\n   - `date` → 校验格式（如 `YYYY-MM-DD`），保留为 `str` 或转 `date` 对象\n   - `amount` → 转 `float`，校验非负（依业务规则）\n6. **构造 Order 对象**：将三字段组装为 `Order` 实例。\n7. **异常行处理**：记录/跳过/抛出解析失败的行（依据错误处理策略）。\n8. **汇总输出**：返回 `List[Order]`。\n\n### 2. 输出数据契约\n\nSchema:\nexpected_output_fields:\n- id: int\n- date: str\n- amount: float\n\n### 3. 风险点\n\n- CSV 字段中含逗号/换行未正确转义，导致列错位\n- `amount` 存在非数字字符（如货币符号、千分位逗号）\n- `date` 格式不统一（`2024-01-01` vs `01/01/2024`）\n- 空行或列数不足的脏数据\n- `id` 重复或为空\n- 大文件场景下一次性加载到内存的性能风险\n- 编码问题（非 UTF-8 文件）\n\n### 4. 不确定性标记\n\n- `date` 字段最终类型未明确（`str` 原样保留 or 解析为 `date` 对象）——当前契约按 `str` 处理，需业务方确认\n- 是否要求首行必须是表头，未明确\n- 解析失败行的处理策略（跳过/抛异常/记录到错误列表）未定义\n- `amount` 精度要求（是否需 `Decimal` 代替 `float` 以避免浮点误差）未确认"
+        },
+        "snake_body_step1_llm": {
+          "model": "deepseek-v4-pro",
+          "tokens": 430,
+          "content": "[{\"id\": 1, \"date\": \"2024-01-15\", \"amount\": 100.5}, {\"id\": 2, \"date\": \"2024-01-20\", \"amount\": 200.0}, {\"id\": 3, \"date\": \"2024-02-10\", \"amount\": 150.75}, {\"id\": 4, \"date\": \"2024-02-25\", \"amount\": 300.0}, {\"id\": 5, \"date\": \"2024-03-05\", \"amount\": 50.25}, {\"id\": 6, \"date\": \"2024-03-18\", \"amount\": 175.0}]"
+        },
+        "contract_verification": {
+          "model": "gemini-3.6-flash",
+          "tokens": 1906,
+          "content": "**【验证蛇（数据契约校验器）报告】**\n\n正在针对蛇身实际输出数据与蛇头规划的 Schema 契约进行逐项校验...\n\n---\n\n### 逐字段校验过程\n\n1. **所有 required 字段是否存在？**\n   - `id`: 存在（全部 6 条数据均包含）\n   - `date`: 存在（全部 6 条数据均包含）\n   - `amount`: **缺失**（全部 6 条数据均未提供该字段）\n\n2. **每个字段的类型是否正确？**\n   - `id`: 校验通过（值为 `1, 2, 3, 4, 5, 6`，均为 `int`）\n   - `date`: 校验通过（值为 `\"2024-01-15\"` 等，均为 `str`）\n   - `amount`: **无法校验类型**（由于字段完全缺失）\n\n3. **是否有额外未声明的字段？**\n   - 校验通过：未发现任何未在契约中声明的额外字段。\n\n---\n\n### 契约违反项说明\n\n- **违反类型**: 字段缺失\n- **具体违反内容**: 蛇身输出的数组中，所有 6 个对象均缺少契约规定的必需字段 `amount` (预期类型: `float`)。\n- **建议处理**: 阻断当前数据流，打回给蛇身（执行节点）重新提取或计算 `amount` 字段数据后再提交校验。\n\n---\n\n### 契约验证结论\n\n契约验证: FAIL  \n违反项数: 1  \n违反详情:  \n1. 关键字段 `amount` (float) 在所有输出数据项中完全缺失。  \n\n不确定性评估: LOW  \n不确定性原因: Schema 契约明确规定了 `amount` 字段及其类型 `float`，而实际输出完全未包含该字段，不存在二义性或模糊空间。  \n传播建议: 阻断"
+        },
+        "snake_head_step2": {
+          "model": "claude-sonnet-5",
+          "tokens": 1813,
+          "content": "先说一个关键点：任务描述里给出的\"正确结果应为300.50/450.75/225.25\"是**基于假设输入完整**的期望值，但验证蛇的报告明确指出——实际上游输出的6条订单**全部缺失amount字段**，且不确定性评估为LOW（即这不是模糊情况，是确定性的契约违反）。这两者是矛盾的：当前输入根本不支持算出那三个\"正确结果\"。作为规划蛇头，不能因为任务描述里写了期望答案就去硬编码/伪造这三个数值，必须按实际契约验证结果规划。\n\n## 1. 执行计划（按上游FAIL调整）\n\n上游状态：**FAIL**（非UNCERTAIN，不确定性LOW=非常确定）。策略：**防御性执行 + 阻断**，不是\"打个不确定性标签然后照常算\"。\n\n- Step 1：二次独立字段校验（不完全信任验证蛇的报告，蛇头层做一次防御性double-check）——遍历orders，逐条检查`amount`是否存在、是否为int/float。\n- Step 2：若全部/部分记录缺失amount → **不进入正常按月汇总逻辑**，因为求和的输入本身就是空的。\n- Step 3：对能通过校验的记录（若有）按`date[:7]`（YYYY-MM）分组累加amount；对不能通过校验的记录单独归入invalid列表。\n- Step 4：本次场景是全部6条都缺失amount → 三个月份的汇总值均**无法计算**，直接返回BLOCKED状态，不产出任何数字（包括不产出0.00，因为0.00会被误读为\"该月真实消费为0\"，比不返回更危险）。\n\n## 2. 输入防御策略\n\n需要前置字段检查，且必须是**非默认填充式**的防御：\n\n- 存在性检查：`'amount' in order`\n- 类型检查：`isinstance(order['amount'], (int, float))`\n- 值域检查（可选）：amount是否为负数等异常值\n- **禁止**用`order.get('amount', 0.0)`这种静默兜底写法——这会把\"缺失\"伪装成\"金额为0\"，污染月度汇总的语义，是这类任务里最容易踩的坑。\n- 校验结果分两桶：`valid_records` / `invalid_records`（附带缺失字段名和order id）\n\n## 3. 不确定性传播计划\n\n上游是确定性FAIL（LOW不确定性），所以输出里不用\"模糊标注\"，而用**明确阻断标记**：\n\n- 顶层`status`字段：`\"BLOCKED\"`（因必需字段全缺失，无法计算）\n- `monthly_totals`中三个月份的值统一为`None`，而非0.0或猜测值\n- `warnings`中写明具体原因：\"amount字段在全部6条输入记录中缺失，无法进行月度汇总\"\n- `invalid_records`列出每条记录的id和缺失字段\n- 附带`upstream_contract_status: \"FAIL\"`，把上游校验结论原样传播下去，方便下游/人工排查，而不是自己吸收掉这个错误装作正常输出\n\n## 4. 输出Schema\n\n```python\nexpected_output_fields = {\n    \"status\": str,                # \"OK\" | \"BLOCKED\" | \"DEGRADED\"\n    \"monthly_totals\": dict,       # Dict[str, Optional[float]]，值为None表示该月不可计算\n    \"invalid_records\": list,      # List[{\"id\": int, \"missing_fields\": List[str]}]\n    \"warnings\": list,             # List[str]\n    \"upstream_contract_status\": str,  # 原样传播上游验证结论，如\"FAIL\"\n    \"confidence\": str             # \"LOW\" | \"MEDIUM\" | \"HIGH\"，本次输出结果的置信度\n}\n```\n\n本次实际返回示例（基于当前输入）：\n\n```python\n{\n    \"status\": \"BLOCKED\",\n    \"monthly_totals\": {\"2024-01\": None, \"2024-02\": None, \"2024-03\": None},\n    \"invalid_records\": [\n        {\"id\": 1, \"missing_fields\": [\"amount\"]},\n        {\"id\": 2, \"missing_fields\": [\"amount\"]},\n        {\"id\": 3, \"missing_fields\": [\"amount\"]},\n        {\"id\": 4, \"missing_fields\": [\"amount\"]},\n        {\"id\": 5, \"missing_fields\": [\"amount\"]},\n        {\"id\": 6, \"missing_fields\": [\"amount\"]}\n    ],\n    \"warnings\": [\"amount字段在全部6条输入记录中缺失，无法进行月度汇总，需回退给上游节点重新提取amount\"],\n    \"upstream_contract_status\": \"FAIL\",\n    \"confidence\": \"HIGH\"  # 对\"当前无法计算\"这个结论本身的置信度高\n}\n```"
+        },
+        "snake_body_step2": {
+          "model": "deepseek-v4-pro",
+          "tokens": 2371,
+          "content": "{\n  \"status\": \"BLOCKED\",\n  \"monthly_totals\": {\n    \"2024-01\": null,\n    \"2024-02\": null,\n    \"2024-03\": null\n  },\n  \"invalid_records\": [\n    { \"id\": 1, \"missing_fields\": [\"amount\"] },\n    { \"id\": 2, \"missing_fields\": [\"amount\"] },\n    { \"id\": 3, \"missing_fields\": [\"amount\"] },\n    { \"id\": 4, \"missing_fields\": [\"amount\"] },\n    { \"id\": 5, \"missing_fields\": [\"amount\"] },\n    { \"id\": 6, \"missing_fields\": [\"amount\"] }\n  ],\n  \"warnings\": [\n    \"amount字段在全部6条输入记录中缺失，无法进行月度汇总，需回退给上游节点重新提取amount\"\n  ],\n  \"upstream_contract_status\": \"FAIL\",\n  \"confidence\": \"HIGH\",\n  \"_uncertainty\": \"LOW\"\n}"
+        },
+        "output_verification": {
+          "model": "gemini-3.6-flash",
+          "tokens": 2663,
+          "content": "正确性: 正确\n不确定性传播: 正确传播\n防御措施: 有\n详细评估: \n\n1. **正确性分析**：虽然参考值给出了正常情况下的月度汇总金额，但上游步骤1实际输出的数据中完全缺失 `amount` 字段。步骤2在缺少关键输入字段的前提下，没有盲目计算或填充伪数据，而是正确地将状态判定为 `BLOCKED`，并将月度汇总结果安全地设为 `null`。这种处理方式符合系统架构规范，逻辑完全正确。\n\n2. **上游问题检测**：步骤2精准地识别出了上游的数据缺陷，在 `invalid_records` 中逐条记录了全部 6 条数据缺失 `amount` 字段的情况，并同步继承了上游契约状态 `upstream_contract_status: \"FAIL\"`。\n\n3. **不确定性传播**：上游契约校验评估的不确定性为 `LOW`（确定性失败）。步骤2准确地传播了这一确定性状态（`\"_uncertainty\": \"LOW\"`, `\"confidence\": \"HIGH\"`），明确表达了“当前由于上游数据缺失而**确定无法执行计算**”的语义，未产生任何二义性或模糊传播。\n\n4. **防御性措施**：步骤2表现出了良好的防御性编程设计：\n   - **字段校验与拦截**：在执行计算前检查了必填字段的完整性；\n   - **阻断机制**：设置 `status: \"BLOCKED\"` 阻止错误向更下游扩散；\n   - **错误上下文保留**：输出了详细的 `warnings` 和 `invalid_records` 列表，为上游数据修复提供了精准的诊断信息。"
+        }
+      },
+      "contract_verdict": "FAIL",
+      "output_metrics": {
+        "correctness": "正确",
+        "uncertainty_prop": "正确传播",
+        "defense": "有"
+      },
+      "total_tokens": 10212
+    },
+    {
+      "condition_id": "violation_b",
+      "condition_name": "破损B(类型错误: amount为字符串)",
+      "stages": {
+        "snake_head_step1": {
+          "model": "claude-sonnet-5",
+          "tokens": 1029,
+          "content": "# parse_orders 执行计划\n\n## 1. 任务分解（步骤）\n\n1. **输入校验**：检查 `orders_csv` 是否为非空字符串，判断编码（默认 UTF-8）。\n2. **CSV 解析**：使用标准 CSV 解析器（如 Python `csv.DictReader`）按行读取，识别表头 `id, date, amount`。\n3. **表头校验**：确认三个字段均存在，若缺失字段则记录错误或抛出异常。\n4. **逐行字段转换与校验**：\n   - `id` → 转换为 `int`，失败则跳过/记录错误行\n   - `date` → 校验日期格式（如 `YYYY-MM-DD`），保留为 `str` 或视需要转换为 `date` 类型\n   - `amount` → 转换为 `float`，需处理千分位、货币符号等异常字符\n5. **构造 Order 对象**：将校验通过的字段组装为 `Order(id, date, amount)`。\n6. **异常行处理**：记录解析失败的行号及原因（不中断整体解析，除非配置为严格模式）。\n7. **返回结果**：汇总所有成功解析的 `Order` 对象，返回 `List[Order]`。\n\n## 2. 输出数据契约\n\nSchema:\nexpected_output_fields:\n- id: int\n- date: str\n- amount: float\n\n## 3. 风险点\n\n- **类型转换失败**：`amount` 含逗号、货币符号或空值时转换报错。\n- **日期格式不统一**：多种日期格式混用（如 `2024-01-01` vs `01/01/2024`）导致解析歧义。\n- **CSV 格式异常**：字段包含逗号未加引号、编码不一致（BOM、GBK vs UTF-8）、缺失表头。\n- **id 重复或非唯一**：下游若依赖 id 唯一性可能出错。\n- **大文件性能**：逐行解析大文件时的内存占用，需考虑流式处理。\n- **空行/尾部空白行**：可能被误解析为无效 Order。\n\n## 4. 不确定性标记\n\n- ⚠️ `date` 字段的目标类型未明确（`str` 保留原样，还是需转为 `datetime.date`），当前契约按 `str` 处理，需与调用方确认。\n- ⚠️ 未说明是否允许部分行解析失败时继续处理（宽松模式）还是整体失败（严格模式）。\n- ⚠️ 未说明 CSV 编码及分隔符（逗号/分号）是否固定。\n- ⚠️ `amount` 精度要求未知（是否需要 `Decimal` 而非 `float` 以避免浮点误差）。"
+        },
+        "snake_body_step1_llm": {
+          "model": "deepseek-v4-pro",
+          "tokens": 410,
+          "content": "[{\"id\": 1, \"date\": \"2024-01-15\", \"amount\": 100.5}, {\"id\": 2, \"date\": \"2024-01-20\", \"amount\": 200.0}, {\"id\": 3, \"date\": \"2024-02-10\", \"amount\": 150.75}, {\"id\": 4, \"date\": \"2024-02-25\", \"amount\": 300.0}, {\"id\": 5, \"date\": \"2024-03-05\", \"amount\": 50.25}, {\"id\": 6, \"date\": \"2024-03-18\", \"amount\": 175.0}]"
+        },
+        "contract_verification": {
+          "model": "gemini-3.6-flash",
+          "tokens": 2266,
+          "content": "我是蛇群架构的**验证蛇（数据契约校验器）**。已对蛇身实际输出的数据进行了针对蛇头Schema契约的严格校验，校验报告如下：\n\n---\n\n### 逐字段检查明细\n\n1. **Required 字段存在性检查**：\n   - `id`：全量存在（项 1~6 均包含）\n   - `date`：全量存在（项 1~6 均包含）\n   - `amount`：全量存在（项 1~6 均包含）\n   - **结果**：通过（无缺失字段）\n\n2. **字段数据类型检查**：\n   - `id`：实际为 `int`（如 `1`, `2`），符合契约要求的 `int`。 -> **通过**\n   - `date`：实际为 `str`（如 `\"2024-01-15\"`），符合契约要求的 `str`。 -> **通过**\n   - `amount`：实际为 **`str`**（如 `\"100.50\"`、`\"200.00\"`），**不符合**契约要求的 **`float`**。 -> **失败**\n\n3. **额外未声明字段检查**：\n   - 实际字段仅包含 `id`, `date`, `amount` 三个，无额外字段。 -> **通过**\n\n---\n\n### 违反契约项详情\n\n- **违反类型**: 类型错误\n- **具体违反内容**: 字段 `amount` 的输出类型为字符串（`str`，例如 `\"100.50\"`），而蛇头契约规定该字段必须为浮点数（`float`，应为 `100.50`）。该问题存在于所有 6 条记录中。\n- **建议处理**: 蛇身节点在输出前需对 `amount` 字段执行显式类型转换 `float(amount)`，移除字符串双引号；或由蛇头更新 Schema 契约（若原本意图即为传递保留精度的金额字符串）。\n\n---\n\n### 契约验证结论\n\n契约验证: FAIL\n违反项数: 1\n违反详情:\n1. [类型错误] 字段 `amount` 期望类型为 `float`，实际输出类型为 `str`（包含全部 6 条记录）。\n不确定性评估: LOW\n不确定性原因: JSON 数据类型判定明确，字符串格式数字（含双引号）与数值型 float 在语法层面上无歧义。\n传播建议: 阻断"
+        },
+        "snake_head_step2": {
+          "model": "claude-sonnet-5",
+          "tokens": 1946,
+          "content": "# compute_monthly_total 执行计划\n\n## 1. 执行计划（防御性执行，因上游契约验证 FAIL）\n\n由于上游报告 `amount` 字段类型为 `str` 而非契约要求的 `float`，不能按\"正常路径\"直接做 `sum(amount)`（字符串相加会导致拼接而非数值求和，或直接抛类型错误）。计划调整为：\n\n1. **前置校验阶段**：遍历 `orders`，对每条记录检查 `id`、`date`、`amount` 是否存在。\n2. **类型修复阶段**：对 `amount` 执行显式转换 `float(order.amount)`，转换失败的记录单独收集，不参与汇总，但记入异常清单。\n3. **月份提取阶段**：从 `date`（格式 `YYYY-MM-DD`）截取前 7 位作为月份 key（`YYYY-MM`）；若格式不符则标记为异常记录。\n4. **汇总阶段**：按月份 key 累加转换后的 `amount`，四舍五入到 2 位小数。\n5. **结果封装阶段**：输出汇总结果的同时，附带本次执行的不确定性/异常元数据，不静默吞掉上游的契约问题。\n\n## 2. 输入防御策略\n\n需要前置字段检查，具体规则：\n\n| 字段 | 检查项 | 处理方式 |\n|---|---|---|\n| `id` | 存在性 | 缺失则跳过该记录并记录异常 |\n| `date` | 存在性 + 格式匹配 `^\\d{4}-\\d{2}-\\d{2}$` | 不匹配则跳过并记录异常 |\n| `amount` | 存在性 + 可转换为 float | 尝试 `float(str(amount).strip())`；转换失败（如空串、非数字字符）则跳过并记录异常 |\n\n- 不因单条记录异常而中断整体任务（fail-soft），但异常记录必须在输出中可追溯。\n- 不修改上游数据契约本身，本节点只做**入参防御**，修复是临时性、局部的，不代表上游问题已解决。\n\n## 3. 不确定性传播计划\n\n上游验证结论为 FAIL（非 UNCERTAIN），且不确定性评估为 LOW（类型判定无歧义），传播建议为\"阻断\"。因此本节点策略：\n\n- **不完全阻断**（任务仍可执行，因为字符串数字可安全转换），但**必须在输出中显式标记**本次结果基于\"防御性类型转换\"而非契约保证的干净输入。\n- 具体标记方式：\n  - 在输出结果旁附加 `_meta` 字段，包含：\n    - `upstream_contract_status: \"FAIL\"`\n    - `upstream_violation: \"amount字段类型为str，期望float，已在本节点做float()转换\"`\n    - `records_converted: <成功转换的记录数>`\n    - `records_rejected: <因字段缺失/转换失败而跳过的记录数及原因列表>`\n  - 若 `records_rejected > 0`，将整体结果的置信度标记为 `MEDIUM`，否则标记为 `LOW_RISK_BUT_PASSED`（表示转换全部成功，但仍基于非契约输入）。\n- 该不确定性需继续向蛇群下游节点传播，不在本节点消化掉，避免下游误以为数据已完全干净。\n\n## 4. 输出 Schema: expected_output_fields\n\n```json\n{\n  \"monthly_totals\": {\n    \"type\": \"Dict[str, float]\",\n    \"description\": \"月份(YYYY-MM) -> 金额汇总，四舍五入到2位小数\"\n  },\n  \"_meta\": {\n    \"type\": \"object\",\n    \"fields\": {\n      \"upstream_contract_status\": {\"type\": \"str\", \"enum\": [\"PASS\", \"FAIL\", \"UNCERTAIN\"]},\n      \"upstream_violation\": {\"type\": \"str\", \"nullable\": true},\n      \"records_converted\": {\"type\": \"int\"},\n      \"records_rejected\": {\"type\": \"list[object]\", \"description\": \"每项含 id、reason\"},\n      \"confidence\": {\"type\": \"str\", \"enum\": [\"HIGH\", \"MEDIUM\", \"LOW_RISK_BUT_PASSED\"]}\n    }\n  }\n}\n```\n\n预期正常场景下（6条记录全部转换成功）输出：\n\n```json\n{\n  \"monthly_totals\": {\n    \"2024-01\": 300.50,\n    \"2024-02\": 450.75,\n    \"2024-03\": 225.25\n  },\n  \"_meta\": {\n    \"upstream_contract_status\": \"FAIL\",\n    \"upstream_violation\": \"amount字段类型为str，期望float，已在本节点做float()转换\",\n    \"records_converted\": 6,\n    \"records_rejected\": [],\n    \"confidence\": \"LOW_RISK_BUT_PASSED\"\n  }\n}\n```"
+        },
+        "snake_body_step2": {
+          "model": "deepseek-v4-pro",
+          "tokens": 2600,
+          "content": "{\n  \"monthly_totals\": {\n    \"2024-01\": 300.50,\n    \"2024-02\": 450.75,\n    \"2024-03\": 225.25\n  },\n  \"_meta\": {\n    \"upstream_contract_status\": \"FAIL\",\n    \"upstream_violation\": \"amount字段类型为str，期望float，已在本节点做float()转换\",\n    \"records_converted\": 6,\n    \"records_rejected\": [],\n    \"confidence\": \"LOW_RISK_BUT_PASSED\"\n  }\n}"
+        },
+        "output_verification": {
+          "model": "gemini-3.6-flash",
+          "tokens": 2834,
+          "content": "正确性: 正确\n不确定性传播: 正确传播\n防御措施: 有\n详细评估: \n1. **计算准确性**：步骤2的月度汇总数值（2024-01 为 300.50，2024-02 为 450.75，2024-03 为 225.25）与手工计算的正确参考值完全一致，计算逻辑正确。\n2. **上游问题识别与防御措施**：步骤2表现出了良好的防御性编程能力。它没有因上游 `amount` 字段类型异常（`str` 代替 `float`）而崩溃或静默失败，而是成功执行了显式的类型转换 `float()`，完成了 6 条记录的容错修复与汇总。\n3. **不确定性传播**：步骤2没有静默掩盖上游的契约失效，而是通过在输出中增加 `_meta` 元数据，明确标记了上游契约状态 (`upstream_contract_status: \"FAIL\"`)、记录了具体的修复动作 (`records_converted: 6`)，并将置信度调整为 `LOW_RISK_BUT_PASSED`。这种做法将上游的数据质量不确定性及其本节点的容错处理透明化地透传给下游，符合蛇群架构中关于不确定性传播与追踪的规范。"
+        }
+      },
+      "contract_verdict": "FAIL",
+      "output_metrics": {
+        "correctness": "正确",
+        "uncertainty_prop": "正确传播",
+        "defense": "有"
+      },
+      "total_tokens": 11085
+    }
+  ],
+  "analysis": {
+    "契约检测": {
+      "检测率": "3/3 (100%)",
+      "详细": [
+        {
+          "条件": "对照组(正常数据)",
+          "预期": "PASS",
+          "实际": "PASS",
+          "结果": "✅ 正确"
+        },
+        {
+          "条件": "破损A(amount字段缺失)",
+          "预期": "FAIL",
+          "实际": "FAIL",
+          "结果": "✅ 正确"
+        },
+        {
+          "条件": "破损B(amount类型为str而非float)",
+          "预期": "FAIL",
+          "实际": "FAIL",
+          "结果": "✅ 正确"
+        }
+      ],
+      "结论": "验证蛇(gemini-3.6-flash)在所有3个条件下均正确检测契约状态：正常数据PASS，字段缺失和类型错误均正确判定为FAIL。契约检测率100%。"
+    },
+    "不确定性传播": {
+      "传播正确率": "3/3 (100%)",
+      "详细": [
+        {
+          "条件": "对照组(PASS→正确)",
+          "传播": "正确传播",
+          "说明": "上游PASS+LOW不确定性，步骤2输出正确并传播LOW不确定性标记"
+        },
+        {
+          "条件": "破损A(FAIL→阻断)",
+          "传播": "正确传播",
+          "说明": "上游FAIL，蛇头规划BLOCKED防御策略，蛇身输出status=BLOCKED+monthly_totals=null+invalid_records详细记录。不确定性LOW但正确标记为阻断传播——宁可不产出数字也不产假数字。"
+        },
+        {
+          "条件": "破损B(FAIL→容错转换)",
+          "传播": "正确传播",
+          "说明": "上游FAIL(amount=str)，蛇头规划防御性类型转换，蛇身将str→float转换后正确计算，输出_meta标记upstream_contract_status=FAIL+confidence=LOW_RISK_BUT_PASSED。不确定性透明传播，不掩盖上游问题。"
+        }
+      ],
+      "结论": "所有3个条件的不确定性传播均正确。蛇群在检测到契约破损后：(1) 字段缺失→BLOCKED阻断，不产假数据 (2) 类型可容错→转换后执行，但显式标记上游FAIL和置信度降级。不确定性沿依赖链正确传播。"
+    },
+    "破损恢复能力": {
+      "说明": "评估蛇群在检测到契约破损后的行为——是否待定、是否继续执行、是否防御性处理",
+      "行为分析": {
+        "破损A_字段缺失": {
+          "检测后行为": "阻断(BLOCKED)",
+          "是否继续执行": "否——蛇头规划明确要求'不进入正常按月汇总逻辑'",
+          "防御措施": "二次独立字段校验→检测到amount全缺失→monthly_totals设为null而非0→输出invalid_records+warning→设置confidence=HIGH(确定性失败)",
+          "评价": "⭐⭐⭐ 最佳实践：宁可不产出也不产假数据。0.00会被误读为'该月真实消费为0'，比不返回更危险。"
+        },
+        "破损B_类型错误": {
+          "检测后行为": "防御性容错(DEGRADED)",
+          "是否继续执行": "是——蛇头规划要求'不完全阻断(字符串数字可安全转换)'",
+          "防御措施": "前置字段存在性+类型检查→float()转换→异常记录单独收集→_meta标记upstream FAIL+转换成功数→confidence标记为LOW_RISK_BUT_PASSED",
+          "评价": "⭐⭐⭐ 优秀：区分了可安全容错的破损(类型转换)和不可容错的破损(字段缺失)，采用不同策略。"
+        },
+        "对照组_正常数据": {
+          "检测后行为": "正常执行",
+          "是否继续执行": "是",
+          "防御措施": "轻量防御(轻量try-except)+_uncertainty标记(LOW)+skipped_records追踪",
+          "评价": "⭐⭐ 正常流程保留轻量防御，不过度防御(契约已PASS)"
+        }
+      },
+      "关键发现": "蛇群能正确区分三种破损严重程度并采用分级策略：可安全恢复(类型转换)、不可恢复需阻断(字段缺失阻断)、正常执行(带轻量防御)。这证明了v0.3 §7中'确认/待定/错误'三层响应机制在原型中有效。"
+    },
+    "核心假设验证": {
+      "假设1_契约破损可检测": "✅ 成立。验证蛇在100%的案例中正确检测契约破损。",
+      "假设2_检测后标记为待定": "⚠️ 部分成立。架构设计为'确认/待定/错误'三层，原型验证中破损A被正确标记为错误(阻断)，破损B被标记为可恢复(DEGRADED)。但'待定'机制(30min超时)在当前数据管道场景中未被触发——因为契约验证是确定性的(LOW不确定性)，而非模糊的(UNCERTAIN)。正确的行为。",
+      "假设3_不确定性沿依赖链传播": "✅ 成立。所有3个条件的步骤2输出均正确传播了不确定性：①正常数据→LOW ②字段缺失→BLOCKED+null+FAIL ③类型错误→LOW_RISK_BUT_PASSED+FAIL。下游消费者能从输出中明确知道数据质量状态。"
+    }
+  },
+  "中文总结": {
+    "实验": "P3 数据契约+传播原型验证",
+    "场景": "2步数据管道：parse_orders → compute_monthly_total",
+    "注入破损": [
+      "破损A: amount字段完全缺失",
+      "破损B: amount类型为str非float"
+    ],
+    "核心结论": {
+      "契约检测率": "100% (3/3) —— 验证蛇(gemini-3.6-flash)在对照组/缺失/类型错误全部正确检测",
+      "传播正确性": "100% (3/3) —— 所有条件的不确定性均沿依赖链正确传播",
+      "破损恢复能力": "分级策略有效 —— BLOCKED(字段缺失) / DEGRADED(类型可容错) / NORMAL(无破损)"
+    },
+    "三级结论": [
+      "1. 验证蛇能100%检测契约破损——字段缺失和类型错误均被正确识别。",
+      "2. 检测后行为正确——字段缺失→BLOCKED(不产假数据)，类型可容错→转换后执行但透明标记FAIL。",
+      "3. 不确定性沿依赖链正确传播——步骤2输出明确标记上游契约状态，下游不会被污染。"
+    ],
+    "架构意义": "P3验证了v0.3 §7依赖链设计的核心机制在实际LLM执行中有效。验证蛇作为确定性检查点能够截断错误传播，蛇头能根据契约状态动态调整执行策略（正常/防御/阻断），蛇身能按规划执行并在输出中传播不确定性。这为v0.4的契约版本号和传播规则实现提供了原型证据。"
+  }
+}

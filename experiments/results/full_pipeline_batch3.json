@@ -1,0 +1,292 @@
+{
+  "experiment": "full_pipeline_batch3",
+  "description": "深度对抗用例(S3-S7)全链路异构法官实验 — 蛇头(claude-sonnet-5) → 异构三法官(deepseek-v4-pro t=0.3/0.7, gemini-3.6-flash t=0.3) → 深挖",
+  "timestamp": "2026-08-04",
+  "pipeline": {
+    "snake_head_model": "claude-sonnet-5",
+    "snake_head_temperature": 0.3,
+    "judge_configs": [
+      {
+        "name": "judge_dsv4_03",
+        "model": "deepseek-v4-pro",
+        "temperature": 0.3
+      },
+      {
+        "name": "judge_dsv4_07",
+        "model": "deepseek-v4-pro",
+        "temperature": 0.7
+      },
+      {
+        "name": "judge_gemini_03",
+        "model": "gemini-3.6-flash",
+        "temperature": 0.3
+      }
+    ],
+    "deep_dive_model": "deepseek-v4-pro",
+    "deep_dive_temperature": 0.3,
+    "deep_dive_note": "全部用例为一致判决(unanimous)，无需深挖"
+  },
+  "results": [
+    {
+      "id": "S3",
+      "error_type": "L4: subjective / code quality",
+      "ground_truth": "PASS",
+      "task": "写一个函数 process_orders(orders)，按类型打折处理订单。类型 A=9折，B=满100减20，C=原价。返回总金额。",
+      "code": "def process_orders(orders):\n    total = 0\n    count = 0\n    for o in orders:\n        p = o['price']\n        if o['type'] == 'A':\n            p = p * 0.9\n        elif o['type'] == 'B':\n            if p >= 100:\n                p = p - 20\n        elif o['type'] == 'C':\n            p = p\n        total += p\n        count += 1\n    return total",
+      "snake_head_analysis": {
+        "model": "claude-sonnet-5",
+        "temperature": 0.3,
+        "analysis": "## 一、任务分解\n\n1. **明确输入数据结构**：确定 `orders` 的具体形态（如 `[{'type': 'A', 'amount': 150}, ...]`），以及字段名、类型约定\n2. **初始化累加器**：`total = 0`\n3. **遍历订单**：对每一条 order 取出 `type` 和 `amount`\n4. **按类型计算折后金额**\n   - A → `amount * 0.9`\n   - B → `amount - 20 if amount >= 100 else amount`\n   - C → `amount`\n5. **异常/未知输入处理**：非法 type、非法 amount 的兜底策略\n6. **累加并返回总金额**（含精度处理）\n\n## 二、分步风险点\n\n**步骤1（输入结构）**\n- 隐含假设：订单是 dict 而非自定义对象，字段名固定为 `type`/`amount`，未做说明就是设计缺口\n- 风险：字段名大小写不一致（`Type` vs `type`），或用对象属性访问（`order.type`）而非 key 访问，会直接抛 KeyError/AttributeError\n\n**步骤3（遍历）**\n- `orders` 为空列表 → 应返回 0，需确认这是预期行为而非报错\n- `orders` 本身为 `None` 或非可迭代类型 → 需要显式判断，否则遍历时直接崩溃\n- 列表中混入 `None` 或格式不完整的元素\n\n**步骤4（折扣计算，核心风险区）**\n- **B 类型边界判断**：“满100”是否包含等于100？`>=100` 和 `>100` 是完全不同的实现，题目没写清楚，是最容易被误判的一处\n- **B 类型是否可叠加满减**：金额200元只减20，还是按“每满100减20”叠加减40？这是需求歧义，直接影响函数正确性，必须先确认\n- **未知 type（非 A/B/C）**：静默按原价处理？跳过不计入总额？还是抛异常？三种策略结果完全不同，代码里若漏写 else 分支，容易导致该订单被“悄悄丢弃”而无报错，属于隐蔽 bug\n- **amount 为负数**：是否合法业务场景（退款单）？如果合法，A/B 折扣逻辑对负数是否还成立需要重新验证\n- **amount 非数字类型**（字符串、None）：不做类型校验会导致 `TypeError` 或错误的字符串拼接结果（Python 中字符串 * 数字不会报错但语义错误）\n\n**步骤6（累加与返回）**\n- 浮点数精度问题：多笔 9 折金额累加可能出现 `0.1 + 0.2 = 0.30000000000000004` 类误差，货币计算场景通常需要 `round(total, 2)` 或用 `Decimal`\n- 返回类型未定义：是否要求 float 保留两位小数，还是允许任意精度浮点\n\n## 三、不确定性标记（需求澄清项，优先级从高到低）\n\n1. **B 类型满减边界**：`amount >= 100` 还是 `amount > 100`？（默认按 `>=` 实现，但需向需求方确认）\n2. **满减是否可叠加**（100/200/300 元是否阶梯减免）\n3. **非法 type 的处理策略**（抛异常 / 忽略 / 按原价计），这是最容易埋雷的隐藏分支\n4. **输入合法性校验的边界**：是否需要对 `amount<0`、`amount` 非数字、缺失字段做防御性处理，还是假设输入永远合法\n5. **返回值精度要求**：是否需要 `round` 到分（两位小数）\n6. **订单数据结构**：dict 还是对象，是否还有其他必需字段（如订单号，用于错误定位）\n\n建议：在写代码前先就第1、2、3点向需求方或业务方确认，这三点决定的是业务正确性而非代码风格，一旦假设错误，函数逻辑本身就是错的，测试用例也无法发现（除非测试用例本身覆盖了这些边界）。",
+        "total_tokens": 1650
+      },
+      "judges": [
+        {
+          "judge": "judge_dsv4_03",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: 字段名错误。代码使用 `o['price']` 获取订单金额，但需求中订单的金额字段应为 `amount`。这会导致 KeyError（若订单无 `price` 字段）或使用了语义错误的字段，使业务逻辑完全失效。\n\nBug 2: 未知订单类型静默按原价处理。对于非 A/B/C 的类型，代码不进入任何分支，直接累加原价，既无日志也无异常，容易掩盖数据错误或需求变更风险。\n\nBug 3: 缺少输入合法性校验。未检查 `amount` 是否为数字类型（可能为 None、字符串等），也未处理负数等异常值；非法输入会导致运行时 TypeError 或产生无意义的计算结果。\n\nBug 4: 累加浮动数未做精度处理。多笔 A 类 9 折金额累加可能产生浮点误差（如 0.1+0.2 问题），货币计算应使用 `round(total, 2)` 或 `Decimal` 避免精度丢失。\n\nBug 5: B 类满减逻辑未明确叠加规则。代码仅对满 100 单笔减 20，若业务预期是“每满 100 减 20”（如 200 应减 40），则当前实现错误；此歧义未在代码中处理或注释说明。\n\nBug 6: 未对 `orders` 做防御性检查。若 `orders` 为 `None` 或非可迭代对象，直接遍历会抛出 TypeError，缺少健壮性。\n\n（附加：变量 `count` 定义但未使用，虽无功能影响，但反映代码清洁度不足。）",
+          "tokens": 2490
+        },
+        {
+          "judge": "judge_dsv4_07",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: **字段名假设错误**。代码使用 `o['price']` 取值，而任务描述与蛇头风险分析均围绕 `amount` 字段展开。字段名不一致将直接导致 KeyError 或逻辑错误，表明实现与规格脱节。\nBug 2: **未知订单类型静默按原价处理**。对于非 A/B/C 的 `type`，代码未进入任何分支，仅保留初始 `price` 并累加。这种隐式兜底策略未经显式声明，极易掩盖数据异常（如拼写错误、非法类型码），属于蛇头指出的“隐藏分支”风险。\nBug 3: **缺少输入合法性校验**。未对 `amount` 进行类型检查，若传入字符串、None 等非数字值，会在算术运算时抛出 TypeError；若为负数，也会不加甄别地参与折扣计算和累加，造成总额错误。亦未处理字段缺失的情况（KeyError）。\nBug 4: **浮点精度未处理**。`p * 0.9` 产生浮点数，多次累加可能产生 `0.1 + 0.2` 式误差。货币计算场景必须使用 `round(..., 2)` 或 `Decimal`，否则返回结果不符合财务要求。\nBug 5: **未防御 `orders` 为 None 或不可迭代**。函数直接对 `orders` 进行 for 遍历，若传入 `None` 或非列表对象将抛出 TypeError，缺少参数健壮性校验。\nBug 6: **冗余代码**：变量 `count` 被赋值和递增但从未使用，表明代码未经整理或存在未完成逻辑。",
+          "tokens": 2787
+        },
+        {
+          "judge": "judge_gemini_03",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: **字段键名不匹配（KeyError 致命错误）**\n蛇头分析明确指出订单金额字段约定为 `amount`，但代码中却使用了 `p = o['price']`。若传入标准格式的数据（如 `{'type': 'A', 'amount': 150}`），程序会直接抛出 `KeyError: 'price'` 导致崩溃。\n\nBug 2: **缺乏空值防护（NoneType 崩溃风险）**\n蛇头分析在步骤3中强调了 `orders` 为 `None` 时的崩溃风险。代码未对 `orders` 是否为空或 `None` 进行判断，直接执行 `for o in orders:`，当 `orders=None` 时会抛出 `TypeError: 'NoneType' object is not iterable`。\n\nBug 3: **未知类型（Type）缺乏防御与分支控制缺陷**\n蛇头分析指出非 A/B/C 类型漏写 `else` 分支会导致隐蔽 bug。代码中对于未知类型（如 `'D'`），既未抛异常也未跳过，而是由于先执行了 `p = o['price']`，直接静默按原价累加进总额，可能导致非法订单被无感知地错误计费。\n\nBug 4: **浮点数计算精度丢失（货币计算风险）**\n蛇头分析在步骤6中明确提示了 `p * 0.9` 产生的浮点数累加误差问题（如 `0.1 + 0.2 = 0.30000000000000004`）。代码直接返回未精化的 float 累加值 `total`，未按要求做 `round(total, 2)` 或使用 `Decimal` 处理，会导致货币计算结果出现精度偏差。\n\nBug 5: **存在死代码/未使用的冗余变量**\n代码中初始化了 `count = 0` 并随循环 `count += 1`，但该变量在后续逻辑及返回值中完全未被使用，属于无用的冗余代码。",
+          "tokens": 3260
+        }
+      ],
+      "votes": {
+        "FAIL": 3
+      },
+      "deep_dive": null,
+      "final_verdict": "FAIL",
+      "correct": false,
+      "case_total_tokens": 10187
+    },
+    {
+      "id": "S4",
+      "error_type": "L3: snake head conflict",
+      "ground_truth": "PASS",
+      "task": "写一个函数 parse_date_range(expr)，解析 'YYYY-MM-DD to YYYY-MM-DD' 格式的日期范围，返回日期列表。",
+      "code": "def parse_date_range(expr):\n    parts = expr.split(' ')\n    start = parts[0]\n    end = parts[2]\n    from datetime import datetime, timedelta\n    s = datetime.strptime(start, '%Y-%m-%d')\n    e = datetime.strptime(end, '%Y-%m-%d')\n    return [(s + timedelta(days=i)).strftime('%Y-%m-%d') for i in range((e-s).days+1)]",
+      "snake_head_analysis": {
+        "model": "claude-sonnet-5",
+        "temperature": 0.3,
+        "analysis": "## 1. 任务分解\n\n| 步骤 | 内容 |\n|---|---|\n| ① 输入预处理 | 去除首尾空白，做非空校验 |\n| ② 分隔符拆分 | 按 `to` 关键字把字符串切成两段（起始日期、结束日期） |\n| ③ 单段格式校验 | 每段是否符合 `YYYY-MM-DD` 的字符结构（用正则或 strptime） |\n| ④ 日期合法性解析 | 把字符串转成日期对象，校验月份/日号是否真实存在（含闰年） |\n| ⑤ 顺序校验 | 判断起始日期是否 ≤ 结束日期 |\n| ⑥ 生成日期序列 | 从起始逐天递增到结束，收集成列表 |\n| ⑦ 结果格式化 | 决定返回 `date` 对象列表还是字符串列表 |\n| ⑧ 异常处理 | 统一抛出/返回什么样的错误信息 |\n\n## 2. 每步风险点\n\n**① 输入预处理**\n- 隐含假设：输入一定是单行、无换行的字符串，未处理 `None` 或非字符串类型输入。\n- 全角空格、Tab 等不可见字符可能导致 strip 后仍有残留。\n\n**② 分隔符拆分**\n- `\"to\"` 的大小写敏感性（`TO`/`To`）未定义。\n- 前后空格数量不固定时，`split(\" to \")` 会直接失效，最好用正则 `\\s+to\\s+`。\n- 如果用普通 `split(\"to\")`，要注意误伤——虽然日期本身不含字母，但如果扩展格式支持月份英文名（如 `Jan`），会有歧义风险。\n- 拆分后段数不等于 2（缺失 `to`、多个 `to`）需要显式报错，否则会静默出 bug。\n\n**③ 单段格式校验**\n- `YYYY-MM-DD` 严格校验容易漏掉 `2024-1-1`（未补零）这种\"看起来合理但不合规\"的输入，是否要兼容需要决策。\n- 正则校验只能确认\"形状对\"，不能确认\"日期真实存在\"（如 `2024-02-30`），必须留给下一步处理，否则会被误判为合法。\n\n**④ 日期合法性解析（技术陷阱最集中的一步）**\n- 闰年边界：`2024-02-29` 合法，`2023-02-29` 非法，容易漏测。\n- 月末边界：4/6/9/11 月只有 30 天，31 号要报错。\n- 用 `datetime.strptime` 是最稳的方案，但要注意异常类型是 `ValueError`，需要捕获并转成业务语义明确的错误。\n- 隐含假设：只处理公历（Gregorian），不考虑其他历法。\n\n**⑤ 顺序校验**\n- **最容易被忽略的分支**：起始日期晚于结束日期时，函数该做什么？报错、自动交换、还是返回空列表？三种行为对下游调用方影响完全不同，必须提前定义。\n- 起始 == 结束（单日范围）是否算合法输入，需要显式测试用例。\n\n**⑥ 生成日期序列**\n- 用 `timedelta(days=1)` 逐天累加是标准做法，但要注意跨年、跨月边界的进位是否正确（这块 Python 的 `datetime`/`date` 库本身处理得很好，属于低风险，但如果自己手写日期加法就是高风险区）。\n- **性能/内存陷阱**：如果范围跨越几十年（如 `1900-01-01 to 2999-12-31`），一次性生成列表可能产生几十万个对象，内存占用不可忽视。是否该用生成器（`yield`）而非直接 `list` 返回，是一个架构级决策点。\n\n**⑦ 结果格式化**\n- 返回 `date` 对象还是格式化字符串（如统一转回 `YYYY-MM-DD`），接口契约不明确会导致调用方代码到处做类型判断，属于隐藏返雷。\n- 若返回字符串，格式化本身（补零、四位年份）也要保证和输入格式一致。\n\n**⑧ 异常处理**\n- 是抛异常（如 `ValueError`）还是返回 `None`/空列表，两种风格混用会让调用方难以处理。建议统一为抛异常并附带清晰错误信息（指明是哪一段、什么问题）。\n\n## 3. 不确定性标记（需求方需要拍板的点）\n\n1. **顺序错误的语义**：起始 > 结束时，报错 / 自动交换 / 返回空列表——三选一，我会默认**报错**（最不容易掩盖调用方的逻辑错误），但需要确认。\n2. **返回值类型**：`date` 对象列表 vs 字符串列表——影响所有下游代码，需要明确契约。我倾向返回 `date` 对象，字符串化交给调用方，更符合单一职责。\n3. **大范围的内存策略**：是否要支持生成器模式以应对超大区间。如果任务场景确定范围不会很大（比如业务上限一年），可以不处理；否则建议默认用生成器，按需转 list。\n4. **分隔符容错程度**：大小写、空格数量是否要宽松匹配。我默认用正则 `\\s*to\\s*`（大小写不敏感），但如果业务要求严格匹配 `\" to \"` 单空格，需要收紧正则。\n5. **日期格式严格性**：是否兼容非补零格式（`2024-1-1`）。默认严格校验四位年、两位月、两位日，拒绝非标准格式。\n\n以上5点属于\"看起来是实现细节，实际是产品决策\"的地方，建议在写代码前先确认，避免返工。",
+        "total_tokens": 2209
+      },
+      "judges": [
+        {
+          "judge": "judge_dsv4_03",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: 输入预处理缺失。未对 `expr` 做 `strip()` 去空白、非空校验和类型检查。输入如 `\" 2024-01-01 to 2024-12-31 \"` 会使 `split(' ')` 产生空字符串元素，导致 `parts[0]` 为空或索引偏移，引发 `ValueError` 或 `IndexError`，且错误信息不明确。\n\nBug 2: 分隔符拆分逻辑完全错误。代码使用 `expr.split(' ')` 并按固定索引 `[0]` 和 `[2]` 提取日期，完全忽略关键字 `to` 的位置、数量和空格变体。对多空格、制表符、缺少 `to`、无空格如 `\"2024-01-01to2024-12-31\"`、多余字段等输入，均会解析到错误片段或直接引发 `IndexError`，严重缺乏鲁棒性。\n\nBug 3: 顺序校验缺失。当起始日期晚于结束日期时，`(e-s).days` 为负数，`range(负数)` 生成空序列，导致函数静默返回空列表。这与蛇头建议的“报错”语义违背，容易掩盖调用方的逻辑错误。\n\nBug 4: 异常处理不足。`datetime.strptime` 抛出的 `ValueError`（格式或非法日期）、索引越界 `IndexError`、类型错误 `AttributeError` 等均直接暴露给调用方，没有捕获并转化为业务语义清晰的错误信息，不符合蛇头“统一抛异常并附带明确错误描述”的要求。\n\nBug 5: 未处理多段输入或缺少关键字场景。当输入中包含零个或多个 `to` 时（例如 `\"2024-01-01\"` 或 `\"2024-01-01 to 2024-06-01 to 2024-12-31\"`），代码毫无检验，直接依赖固定索引取值，极易出错且不会给出有意义的错误提示。\n\nBug 6: 返回值决策虽非致命缺陷，但函数直接返回格式化字符串列表，未在文档或接口中明确契约，且未考虑可能的大范围内存压力（一次性生成全量列表无生成器模式），但相比上述硬性错误，影响稍小。",
+          "tokens": 4011
+        },
+        {
+          "judge": "judge_dsv4_07",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: 输入未做任何预处理与类型检查。如果 `expr` 为 `None`、非字符串，或首尾含空格/全角空格/Tab，会导致 `split` 异常或解析失败，未按蛇头分析①的要求处理。\n\nBug 2: 分隔符解析完全脆弱。使用 `expr.split(' ')` 按单个空格切分，无法应对多个连续空格、制表符等分隔；且硬编码索引取 `parts[0]` 和 `parts[2]`，完全不校验中间是否为关键字 `to`（大小写、缺失或多出均不报错）。例如输入 `\"2024-01-01 2024-01-05\"` 只有两个元素会导致 `IndexError`，而 `\"2024-01-01 to 2024-01-05 extra\"` 会静默接受多余内容，违反蛇头分析②的风险控制。\n\nBug 3: 日期解析异常未转换，直接抛出 `ValueError`。当日期不合法（格式错误或不存在如 `2023-02-29`）时，调用方只能拿到原始 `ValueError`，无法区分是起始段还是结束段出错，也不符合业务语义（蛇头分析④和⑧要求捕获并转为明确错误信息）。\n\nBug 4: 起始日期晚于结束日期的行为未定义且危险。当起始 > 结束时，`(e-s).days` 为负，`range` 生成空序列，函数静默返回空列表。这一行为未报错，极易掩盖上游调用逻辑错误，违反蛇头分析⑤中“默认报错”的假设。\n\nBug 5: 生成日期序列一次性构建完整列表，对大范围（如几十年）无任何内存保护，不符合蛇头分析⑥关于大范围风险的建议，缺少生成器或长度限制。\n\nBug 6: 缺少统一的异常处理框架。所有可能失败的环节（类型检查、格式校验、日期解析、顺序校验）均未包裹为统一、有意义的业务异常，调用方不得不处理零散的原始异常（`AttributeError`、`IndexError`、`ValueError`），违反蛇头分析⑧的原则。",
+          "tokens": 4074
+        },
+        {
+          "judge": "judge_gemini_03",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "根据【蛇头分析（风险地图）】的风险点提示，对蛇身代码进行严格审查，结果如下：\n\n### 风险点对齐审查\n\n1. **输入预处理（①区风险）**：未做 `strip()`，未做 `None` 或非字符串校验。\n2. **分隔符拆分（②区风险）**：硬编码 `expr.split(' ')` 并直接按索引 `parts[0]` 和 `parts[2]` 取值。遇到多空格、大小写 `TO`、缺少 `to` 分隔符等情况极易崩溃或逻辑错误。\n3. **日期合法性（③④区风险）**：未对 `strptime` 的 `ValueError` 进行捕获处理，导致非法的日期格式（如 `2024-02-30`）抛出未经封装的原生异常。\n4. **顺序校验（⑤区风险）**：当 `start > end` 时，`(e-s).days + 1` 的值小于等于 0，`range()` 变为空，**函数会静默返回空列表 `[]`**，隐藏了上游逻辑错误。\n5. **异常处理（⑧区风险）**：没有任何异常捕获与统一校验，极易抛出 `IndexError` 或 `ValueError`。\n\n---\n\n### 判决\n\n**判决: FAIL**\n\n**Bug 1: 拆分逻辑极其脆弱（导致 `IndexError` 或数据解析错误）**\n*   代码使用 `expr.split(' ')` 假设输入必须包含且仅包含单空格分割。\n*   若输入 `'2024-01-01 to 2024-01-02'`（中间有多个空格），`parts[2]` 会取到空字符串 `''`，导致日期解析崩溃。\n*   若输入不含空格（如 `'2024-01-01to2024-01-02'`）或缺项，直接抛出 `IndexError: list index out of range`。\n\n**Bug 2: 未校验分隔符关键字 `to`**\n*   代码完全没有检查 `parts[1]` 是否为 `to`。若传入 `'2024-01-01 AND 2024-01-02'`，代码依然会尝试解析前后日期并返回结果，导致不合规输入被静默接受。\n\n**Bug 3: 起始日期晚于结束日期时静默失效（隐藏 Bug）**\n*   当 `start > end`（如 `'2024-01-05 to 2024-01-01'`），`(e-s).days + 1` 计算结果为负数或 0，列表推导式直接返回空列表 `[]`。\n*   这掩盖了调用方的倒置错误，未按架构规范要求抛出语义明确的异常。\n\n**Bug 4: 缺少输入清洗（未处理首尾空白字符）**\n*   若输入带有首尾空格或换行符（如 `' 2024-01-01 to 2024-01-02\\n'`），`parts[0]` 或 `parts[2]` 会包含多余字符，导致 `strptime` 抛出 `ValueError`。\n\n**Bug 5: 原始异常未封装，缺少防护**\n*   未捕获 `datetime.strptime` 的 `ValueError`。当传入 `2024-02-30` 或 `2024-1-1`（未补零格式）时，直接抛出 Python 原生底层异常，未转化为业务可读的错误提示。",
+          "tokens": 4132
+        }
+      ],
+      "votes": {
+        "FAIL": 3
+      },
+      "deep_dive": null,
+      "final_verdict": "FAIL",
+      "correct": false,
+      "case_total_tokens": 14426
+    },
+    {
+      "id": "S5",
+      "error_type": "L2: dual consensus error",
+      "ground_truth": "FAIL",
+      "task": "写一个函数 binary_search(arr, target)，在有序数组中二分查找目标值，返回索引或-1。",
+      "code": "def binary_search(arr, target):\n    left, right = 0, len(arr) - 1\n    while left < right:\n        mid = (left + right) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            left = mid\n        else:\n            right = mid\n    return -1",
+      "snake_head_analysis": {
+        "model": "claude-sonnet-5",
+        "temperature": 0.3,
+        "analysis": "# 任务规划：binary_search(arr, target)\n\n## 1. 任务分解\n\n| 步骤 | 内容 |\n|---|---|\n| S1 | 确定函数签名与返回值约定（找到返回索引，未找到返回 -1） |\n| S2 | 输入校验（是否需要处理 None/空数组/非有序输入） |\n| S3 | 初始化双指针 `low = 0, high = len(arr) - 1` |\n| S4 | 循环条件设计：`while low <= high` |\n| S5 | 计算中点 `mid`，避免溢出（Python 无需担心，但保留意识） |\n| S6 | 比较 `arr[mid]` 与 `target`，决定收缩左区间/右区间/命中 |\n| S7 | 循环结束后返回 -1 |\n| S8 | 编写测试用例覆盖边界场景 |\n\n## 2. 每步风险点\n\n**S1 — 签名与返回约定**\n- 隐含假设：调用者保证 `arr` 已排序（升序）。若未声明，后续行为不可控。\n- 风险：未说明重复元素时返回哪个索引（第一个/任意一个/最后一个）——需要向需求方确认或在实现中明确选择。\n\n**S2 — 输入校验**\n- 边界：空数组 `[]`，单元素数组 `[x]`。\n- 异常输入：`arr` 为 `None`、非列表类型、包含 `None`/混合类型无法比较。\n- 隐含假设：\"有序\"未指明升序还是降序，若数组实际非有序，二分查找会静默返回错误结果而不报错——这是最容易被忽略的陷阱。\n\n**S3/S4 — 指针初始化与循环条件**\n- 经典陷阱：`low < high` vs `low <= high`。用 `<=` 才能覆盖单元素区间，否则会漏掉最后一个候选值。\n- 风险：如果习惯用其他语言（如 Java）的写法，可能引入 `mid = (low+high)/2` 的整数溢出思维定式，Python 中虽不会溢出，但这是跨语言迁移常见的思维残留。\n\n**S5 — 计算中点**\n- `mid = (low + high) // 2`：需确认使用整除，否则索引出错。\n- 风险点极小，但若误写成 `len(arr) // 2` 而不是基于 `low/high`，会导致查找范围计算错误。\n\n**S6 — 比较与区间收缩**\n- 核心陷阱：`low = mid + 1` / `high = mid - 1` 忘记 `+1`/`-1`，直接写 `low = mid`，会造成死循环（无限循环风险，最严重的 bug 类型）。\n- 隐含假设：`target` 与 `arr` 元素类型一致可比较（如字符串与数字混比会抛异常）。\n\n**S7 — 返回 -1**\n- 风险：容易漏掉这一分支，或误将其放在循环内部导致提前退出。\n\n**S8 — 测试覆盖**\n- 必须覆盖：空数组、单元素命中/不命中、目标在两端、目标不存在（小于最小值/大于最大值/落在中间空隙）、重复元素。\n\n## 3. 不确定性标记\n\n- ⚠️ **需要澄清的需求歧义**：数组是否保证升序？是否需要处理降序数组？是否需要处理重复元素时的索引返回策略？这些未在任务描述中说明，是最大的不确定性来源。\n- ⚠️ **死循环风险**：区间收缩边界（`mid+1`/`mid-1`）是实现中最容易出错且最难通过肉眼发现的部分，必须靠测试验证。\n- ⚠️ **是否防御式编程**：是否要对非法输入（非列表、None、类型不可比较）做异常处理，还是假设调用方已保证输入合法——这决定代码的健壮性程度和复杂度，属于设计取舍而非纯技术问题。\n- ⚠️ **性能假设**：若 `arr` 极大且频繁调用，是否需要考虑用 `bisect` 模块替代手写实现（工程权衡，非本任务强制要求，但值得提及）。\n\n若无特殊说明，我会按以下默认假设实现：**升序数组、返回任意一个匹配索引、不做过度输入校验（仅假设 arr 是列表）**。需要我直接给出代码实现吗？",
+        "total_tokens": 0
+      },
+      "judges": [
+        {
+          "judge": "judge_dsv4_03",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\nBug 1: 循环条件应为 `while left <= right`，当前使用 `left < right` 会跳过单元素数组的检查，导致在仅有一个元素且该元素为目标值时错误返回 -1。\nBug 2: 区间收缩时未做 `+1`/`-1`，即 `left = mid` 和 `right = mid` 会导致死循环（例如目标值大于 `arr[mid]` 时 `left` 不会前进，或目标值在数组间隙时无限循环）。正确写法应为 `left = mid + 1` 与 `right = mid - 1`。",
+          "tokens": 2626
+        },
+        {
+          "judge": "judge_dsv4_07",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: 循环条件错误使用了 `while left < right`，应该使用 `while left <= right`。当 `left == right` 时循环不会执行，会直接返回 -1，导致漏掉最后一个候选元素（例如单元素数组且为目标值时错误返回 -1）。\n\nBug 2: 区间收缩时边界未调整，`left = mid` 和 `right = mid` 缺少 `+1`/`-1`，导致当 `left` 与 `right` 相邻时区间无法缩小，造成死循环。正确写法应为 `left = mid + 1` 和 `right = mid - 1`。",
+          "tokens": 2113
+        },
+        {
+          "judge": "judge_gemini_03",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: **循环条件错误，导致无法检测最后一个元素或单元素数组（S3/S4 风险点触发）**\n- **代码体现**：使用了 `while left < right:`。\n- **后果**：当查找范围缩小至只剩一个元素（即 `left == right`）时，循环条件不成立直接退出并返回 `-1`。\n- **示例**：对于输入 `arr = [5], target = 5`，初始 `left = 0, right = 0`，`0 < 0` 为 False，直接返回 `-1`（正确结果应为 `0`）。在多元素数组中查找存在于末尾的元素同样会失败。\n\nBug 2: **区间收缩边界未做 `+1` / `-1` 偏移，导致死循环（S6 风险点触发）**\n- **代码体现**：`left = mid` 和 `right = mid`。\n- **后果**：蛇头分析中预判的“最严重 bug”发生。当 `left` 与 `right` 相差 1 且 `arr[mid] < target` 时，向下取整计算出的 `mid` 永远等于 `left`，赋值 `left = mid` 后指针位置无任何改变，进入无休止的无限循环。\n- **示例**：对于输入 `arr = [1, 3], target = 3`（若修正了 Bug 1 进入循环），`left=0, right=1` $\\rightarrow$ `mid=0` $\\rightarrow$ `arr[0] < 3` 成立 $\\rightarrow$ 执行 `left = 0` $\\rightarrow$ 下轮循环 `left` 仍为 0，程序卡死。",
+          "tokens": 2697
+        }
+      ],
+      "votes": {
+        "FAIL": 3
+      },
+      "deep_dive": null,
+      "final_verdict": "FAIL",
+      "correct": true,
+      "case_total_tokens": 9171
+    },
+    {
+      "id": "S6",
+      "error_type": "L3: regression / shallow copy",
+      "ground_truth": "FAIL",
+      "task": "写一个函数 merge_dicts(d1, d2)，将d2的键值合并到d1，返回合并结果，不修改原始输入。",
+      "code": "def merge_dicts(d1, d2):\n    result = d1.copy()\n    for k, v in d2.items():\n        result[k] = v\n    return result",
+      "snake_head_analysis": {
+        "model": "claude-sonnet-5",
+        "temperature": 0.3,
+        "analysis": "## 1. 任务分解\n\n**目标**：`merge_dicts(d1, d2)` → 合并 d2 到 d1，返回新字典，原始 d1、d2 不变。\n\n拆解为以下步骤：\n\n1. **输入校验**：确认 d1、d2 是否为字典类型（或至少具备 dict 接口）。\n2. **创建独立副本**：为避免修改原始输入，先复制 d1（不能直接在 d1 上操作）。\n3. **合并键值**：把 d2 的键值写入副本，遇到重复键时按既定策略处理覆盖关系。\n4. **返回结果**：返回合并后的新字典，保证原始 d1、d2 引用不变。\n\n对应最简实现思路（浅合并）：\n```python\ndef merge_dicts(d1, d2):\n    result = dict(d1)   # 浅拷贝，避免修改原始 d1\n    result.update(d2)   # d2 覆盖同名 key\n    return result\n```\n\n## 2. 每步风险点\n\n**步骤1 输入校验**\n- 隐含假设：d1、d2 一定是 dict。如果传入 None、list、字符串等，`dict(d1)` 或 `.update()` 会直接抛异常，且报错信息可能不直观。\n- 是否需要显式类型检查并抛出更友好的 TypeError，是一个设计决策，任务描述里没有说明。\n\n**步骤2 创建副本（不修改原始输入）**\n- **最大陷阱：浅拷贝 vs 深拷贝**。`dict(d1)` 只是浅拷贝，如果 d1 的某个 value 是可变对象（如 list、嵌套 dict），合并后修改这个嵌套值仍会影响原始 d1。\n  - 例：`d1 = {\"a\": [1,2]}`，`merged[\"a\"].append(3)` 会同时改变原始 d1[\"a\"]。\n- 如果任务隐含要求\"完全隔离\"（即嵌套结构也不能被外部修改影响），就需要 `copy.deepcopy`，但深拷贝有性能代价，且对不可序列化对象（如文件句柄、线程锁）会失败。\n- 任务描述只说\"不修改原始输入\"，字面上浅拷贝已满足（d1、d2 本身不被修改），但如果用户的真实意图是\"结果与原始输入完全解耦\"，浅拷贝不够。**这是一个语义歧义点。**\n\n**步骤3 合并键值 / 冲突处理**\n- 键冲突策略未明确：任务说\"将 d2 的键值合并到 d1\"，通常理解为 **d2 覆盖 d1 的同名 key**，但也可能有相反理解（保留 d1 优先，仅补充 d2 中 d1 没有的 key）。\n- 嵌套字典是否要递归合并（deep merge）？例如：\n  ```python\n  d1 = {\"a\": {\"x\": 1}}\n  d2 = {\"a\": {\"y\": 2}}\n  ```\n  浅合并结果是 `{\"a\": {\"y\": 2}}`（d1[\"a\"] 被整体覆盖），而递归合并会得到 `{\"a\": {\"x\":1, \"y\":2}}`。任务没有说明是否需要递归，默认应假设浅合并，但这是容易被误解的点。\n- 键类型不一致（如 d1 用字符串 key，d2 用整数 key）本身不是问题，Python dict 支持混合 key，但如果后续有基于 key 类型的逻辑，可能产生隐藏 bug。\n\n**步骤4 返回结果**\n- 确保返回的是普通 dict，而不是 dict 子类实例意外丢失额外属性（如果 d1 是自定义 dict 子类，`dict(d1)` 会退化成普通 dict，丢失子类行为）。\n- 空字典输入（d1={} 或 d2={}）应正确处理，属于边界情况但逻辑上不会出错，只需确认测试覆盖。\n\n## 3. 不确定性标记\n\n需要特别注意、容易决策出错的地方：\n\n- ⚠️ **浅拷贝语义是否满足需求**：如果值包含可变嵌套结构，\"不修改原始输入\"的保证在深层是不完整的。这是最容易被忽视但最重要的风险，建议明确注明函数只做浅拷贝，或者向用户确认是否需要深拷贝。\n- ⚠️ **冲突覆盖方向**：d2 覆盖 d1（常规理解）还是 d1 优先保留？如果没有测试用例或需求文档佐证，默认按\"d2 覆盖 d1\"实现，但应在文档字符串中明确写出，避免调用者产生误解。\n- ⚠️ **是否需要递归合并嵌套字典**：任务没有提及，默认不递归（简单覆盖）。如果实际使用场景是配置合并（常见需求），很可能需要 deep merge，这点需要跟需求方确认。\n- ⚠️ **异常处理边界**：非 dict 输入是否需要主动校验并抛出清晰异常，还是任由 Python 原生异常传播？这属于 API 健壮性设计选择，不是纯逻辑问题。",
+        "total_tokens": 0
+      },
+      "judges": [
+        {
+          "judge": "judge_dsv4_03",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\nBug 1: 未对参数 d1 和 d2 进行类型检查，当传入非字典类型时（如 None、list 等），抛出的异常（AttributeError 或 TypeError）不能直观反映问题所在。根据风险分析步骤1，需增加显式类型检查并抛出清晰的 TypeError。\nBug 2: 使用浅拷贝 (d1.copy()) 导致嵌套可变对象（如列表、嵌套字典）未被隔离，修改合并结果的嵌套值会影响原始输入中对应的对象，与“不修改原始输入”的深层语义存在歧义。应在文档字符串中明确说明该限制，或改用 copy.deepcopy 实现完全隔离。",
+          "tokens": 4745
+        },
+        {
+          "judge": "judge_dsv4_07",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\nBug 1: 缺少输入类型校验，非映射类型参数（如None、list、字符串）会触发难以理解的 AttributeError，未按蛇头风险点进行防御性处理。\nBug 2: 浅拷贝 `d1.copy()` 未在文档字符串中声明，当字典值包含可变对象（如嵌套列表、字典）时，修改返回结果中的深层值会意外影响原始输入，违反“不修改原始输入”的深层语义预期，蛇头最大陷阱未解决。\nBug 3: 冲突覆盖策略（d2 的值直接覆盖 d1 的同名键）未通过文档或注释明确说明，调用者可能产生相反理解（如 d1 优先保留），属于蛇头指出的不确定性标记。\nBug 4: 直接赋值的结果与 d2 的值为同一可变对象引用，后续修改返回字典中的可变值也会污染 d2，未实现结果与所有原始输入的完全解耦，未注明此风险。\nBug 5: 仅依赖 `d1.copy()` 方法，限制了输入类型，若传入其他符合映射协议但无 `copy()` 方法的对象则直接崩溃，不如使用更通用的 `dict(d1)` 接受所有可迭代对象。",
+          "tokens": 4726
+        },
+        {
+          "judge": "judge_gemini_03",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "根据蛇头层的风险分析，对蛇身代码逐一进行针对性审查，判决如下：\n\n```\n判决: FAIL\n\nBug 1: 浅拷贝导致嵌套数据篡改（违反“不修改原始输入”约束）\n代码使用了 `result = d1.copy()`，这仅完成了字典第一层的浅拷贝。若 d1 或 d2 的 value 包含可变嵌套结构（如 list、dict 等），合并后对新字典中嵌套对象的修改仍会影响原始 d1/d2 的内部数据（例如：修改 merged[\"a\"][0] 会同步改变 d1[\"a\"][0]）。若业务场景包含嵌套字典/列表，未按风险地图提示使用深拷贝（copy.deepcopy）将导致原始数据被隐式篡改。\n\nBug 2: 接口兼容性差与实现非最佳实践\n1. 依赖特定方法：`d1.copy()` 依赖 d1 必须实现 `.copy()` 方法。如果传入的是标准库中的 `MappingProxyType` 或自定义 Mapping 对象，程序将抛出 `AttributeError`。相比蛇头分析中建议的 `dict(d1)`，其兼容性较差。\n2. 合并效率：使用 `for k, v in d2.items(): result[k] = v` 手动遍历更新，相比 Python 原生的 `result.update(d2)` 或 `{**d1, **d2}` 效率较低且不够 Pythonic。\n\nBug 3: 缺乏输入校验与防错边界\n代码未对 d1、d2 做任何类型检查或空值防御。若调用方误传 `None` 或非映射类型（如 list、int），代码会在 `d1.copy()` 或 `d2.items()` 处直接爆出底层的 `AttributeError`，无法提供直观且友好的异常提示。\n```\n\n### 改进建议代码\n若仅需浅拷贝合并（标准语义）：\n```python\ndef merge_dicts(d1, d2):\n    if not isinstance(d1, dict) or not isinstance(d2, dict):\n        raise TypeError(\"d1 和 d2 必须为字典类型\")\n    result = dict(d1)\n    result.update(d2)\n    return result\n```\n\n若需完全隔离原始数据（完全防止修改原始输入）：\n```python\nimport copy\n\ndef merge_dicts(d1, d2):\n    if not isinstance(d1, dict) or not isinstance(d2, dict):\n        raise TypeError(\"d1 和 d2 必须为字典类型\")\n    result = copy.deepcopy(d1)\n    result.update(copy.deepcopy(d2))\n    return result\n```",
+          "tokens": 5336
+        }
+      ],
+      "votes": {
+        "FAIL": 3
+      },
+      "deep_dive": null,
+      "final_verdict": "FAIL",
+      "correct": true,
+      "case_total_tokens": 16835
+    },
+    {
+      "id": "S7",
+      "error_type": "L2: interface / strict repair",
+      "ground_truth": "FAIL",
+      "task": "写一个函数 format_name(first, last)，返回 'Last, First' 格式。",
+      "code": "def format_name(first, last):\n    return last + ', ' + first",
+      "snake_head_analysis": {
+        "model": "claude-sonnet-5",
+        "temperature": 0.3,
+        "analysis": "# 执行计划\n\n## 1. 任务分解\n\n| 步骤 | 内容 |\n|---|---|\n① | 定义函数签名 `format_name(first, last)` |\n② | 输入校验（类型、空值判断） |\n③ | 输入清洗（去除首尾空格、处理多余空白） |\n④ | 拼接输出为 `'Last, First'` |\n⑤ | 返回结果 |\n⑥ | 编写测试用例覆盖边界情况 |\n\n## 2. 参考实现\n\n```python\ndef format_name(first: str, last: str) -> str:\n    if not isinstance(first, str) or not isinstance(last, str):\n        raise TypeError(\"first and last must be strings\")\n\n    first = first.strip()\n    last = last.strip()\n\n    if not first or not last:\n        raise ValueError(\"first and last must not be empty\")\n\n    return f\"{last}, {first}\"\n```\n\n## 3. 各步骤风险点\n\n**② 输入校验**\n- 隐含假设：调用者始终传入非空字符串，实际可能传 `None`、数字、空字符串\n- 陷阱：不做校验时 `None` 会在拼接阶段直接抛 `TypeError`，报错位置和信息不直观\n- 决策点：是抛异常（fail-fast）还是静默处理（如返回空串）——业务语义不同，需要产品/调用方确认\n\n**③ 输入清洗**\n- 边界条件：名字前后有空格（如 `\" Tom \"`）\n- 隐含假设：名字只有一个单词，实际可能有复合名（`\"Mary Jane\"`）或复合姓（`\"Smith-Jones\"`），这类不需特殊处理，直接拼接即可，但要注意别误拆分\n- 陷阱：不要用 `.title()` 或 `.capitalize()` 强制改大小写，会破坏 `McDonald`、`von Neumann`、`O'Brien` 这类本身有特殊大小写规则的姓名\n\n**④ 拼接格式**\n- 风险：格式字符串写死为 `f\"{last}, {first}\"`，若后续需求变化（如加中间名、国际化姓名顺序）需要重构\n- 隐含假设：目标语言/文化是\"名+姓\"顺序体系（西方姓名），中文姓名本身就是\"姓+名\"顺序，若误用此函数会产生语义错误（如\"张伟\"拆 first=\"伟\" last=\"张\" 会得到\"张, 伟\"，虽格式对但语义上是重复信息）\n\n## 4. 不确定性标记（需要与调用方确认）\n\n- ⚠️ **空值处理策略未定**：抛异常 vs 返回默认值，取决于上层调用是否已经做过校验\n- ⚠️ **是否需要 Unicode/非拉丁字符支持**：如果是国际化系统，`strip()` 对全角空格等特殊空白字符可能不生效，需要用 `unicodedata` 或正则加强\n- ⚠️ **是否要归一化大小写**：如果业务要求统一显示格式（比如\"tom smith\"→\"Smith, Tom\"），需要额外的 title-case 逻辑，但这会引入对复合姓名处理错误的风险，需权衡\n- ⚠️ **单一职责边界模糊**：当前函数只做格式化，不做校验语义（比如姓名是否含数字、是否合法），这个边界需要明确写入函数文档，避免调用方误用为\"姓名合法性校验\"\n\n需要我按某个不确定性点的决策方向直接落地代码吗？",
+        "total_tokens": 0
+      },
+      "judges": [
+        {
+          "judge": "judge_dsv4_03",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\nBug 1: 缺少输入类型校验。蛇头分析明确指出传入 `None`、数字等非字符串会在拼接时引发不直观的错误，当前代码未对 `first` 和 `last` 做任何类型检查，违反 fail-fast 原则。\nBug 2: 缺少空值判断。未校验空字符串或仅含空白字符的输入，此类输入会生成 `\", Tom\"` 或 `\" , \"` 等无效格式，与业务预期“姓名不可为空”冲突。\nBug 3: 缺少输入清洗。代码未去除首尾空格，若传入 `\" Tom \"`、`\" Smith \"` 会得到 `\" Smith ,  Tom \"`，带多余空格，格式错误。\nBug 4: 错误处理策略缺失。文档和代码均未定义异常或默认行为，调用方无法区分子符串为空、类型错误等场景，不符合蛇头分析中“决策点需明确”的要求。",
+          "tokens": 1437
+        },
+        {
+          "judge": "judge_dsv4_07",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: 未进行输入类型校验。当 `first` 或 `last` 传入 `None`、数字等非字符串值时，拼接操作会抛出 `TypeError`，报错位置和信息不直观，违反蛇头分析“② 输入校验”的要求。\nBug 2: 未进行空值或空字符串校验。当任一参数为空字符串（或仅含空格）时，结果会变成 `', '`、`'Last, '` 或 `', First'` 这类无意义格式，不符合业务预期。\nBug 3: 未进行输入清洗（去除首尾空格）。若参数带有前后空格（如 `\" Tom \"`），结果会保留这些空格，导致输出格式异常（例如 `\"Smith ,  Tom\"` 中的多余空白）。\nBug 4: 缺少文档或函数签名中的类型标注，函数未明确其职责边界（如不保证姓名合法性），调用方容易误用为通用格式化工具。",
+          "tokens": 1554
+        },
+        {
+          "judge": "judge_gemini_03",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "analysis": "判决: FAIL\n\nBug 1: 缺少类型校验与空值判空（违反风险点 ②）\n代码直接使用 `+` 进行字符串拼接。若传入非字符串类型（如 `None`、`123`），会在运行期抛出底层的 `TypeError`，报错位置和语义极不明确；若传入空字符串 `\"\"`，会静默输出语义错误的 `\", \"`，未按照执行计划实现 Fail-Fast 校验机制。\n\nBug 2: 缺失空白字符清洗（违反风险点 ③）\n未对输入参数调用 `.strip()` 进行清洗。当传入带有前后空格的参数（如 `first=\" Tom \"`）时，输出结果会保留非法空格（如 `\"Smith,  Tom \"`），破坏格式一致性。\n\nBug 3: 缺少函数签名类型约束与文档边界说明（违反风险点 ① 及 ⚠️ 不确定性标记）\n代码未添加类型注解（`first: str, last: str) -> str`），也未编写 Docstring 明确函数的职责边界（如说明不负责校验姓名内部合法性），容易引发调用方的语义误用。",
+          "tokens": 2219
+        }
+      ],
+      "votes": {
+        "FAIL": 3
+      },
+      "deep_dive": null,
+      "final_verdict": "FAIL",
+      "correct": true,
+      "case_total_tokens": 6674
+    }
+  ],
+  "summary": {
+    "total_cases": 5,
+    "correct_count": 3,
+    "incorrect_count": 2,
+    "accuracy": "60.0%",
+    "total_tokens": 57293,
+    "per_case_tokens": {
+      "S3": 10187,
+      "S4": 14426,
+      "S5": 9171,
+      "S6": 16835,
+      "S7": 6674
+    },
+    "vote_distribution": {
+      "S3": {
+        "FAIL": 3
+      },
+      "S4": {
+        "FAIL": 3
+      },
+      "S5": {
+        "FAIL": 3
+      },
+      "S6": {
+        "FAIL": 3
+      },
+      "S7": {
+        "FAIL": 3
+      }
+    }
+  }
+}

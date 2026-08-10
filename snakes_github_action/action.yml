@@ -1,0 +1,40 @@
+name: '🐍 蛇群 Snakes'
+description: '多智能体代码审查与修复 — Issue触发自动修复并提PR'
+author: '小周'
+
+inputs:
+  api-key:
+    description: 'Tokeness API Key'
+    required: true
+  github-token:
+    description: 'GitHub Token (用于创建PR)'
+    default: ${{ github.token }}
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install deps
+      shell: bash
+      run: pip install requests
+
+    - name: Run Snakes
+      shell: bash
+      env:
+        SNAKES_API_KEY: ${{ inputs.api-key }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_EVENT_PATH: ${{ github.event_path }}
+      run: python ${{ github.action_path }}/action.py
+
+branding:
+  icon: 'git-pull-request'
+  color: 'green'

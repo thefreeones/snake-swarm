@@ -1,0 +1,248 @@
+[
+  {
+    "case": "case2",
+    "title": "safe_divide 类型校验缺失",
+    "z_score": 2,
+    "ground_truth": "FAIL",
+    "combination": "C2_Claude_DS_Gemini",
+    "judges": [
+      {
+        "model": "claude-sonnet-5",
+        "label": "Claude",
+        "temperature": 0.3,
+        "verdict": "FAIL",
+        "tokens": 2672
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "label": "DS-hi",
+        "temperature": 0.7,
+        "verdict": "FAIL",
+        "tokens": 4207
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "label": "Gemini",
+        "temperature": 0.3,
+        "verdict": "FAIL",
+        "tokens": 4378
+      }
+    ],
+    "votes": [
+      "FAIL",
+      "FAIL",
+      "FAIL"
+    ],
+    "fail_count": 3,
+    "pass_count": 0,
+    "final_verdict": "FAIL",
+    "correct": true,
+    "total_tokens": 11257,
+    "deep_dive": null
+  },
+  {
+    "case": "case8",
+    "title": "get_user_info KeyError",
+    "z_score": 2,
+    "ground_truth": "FAIL",
+    "combination": "C2_Claude_DS_Gemini",
+    "judges": [
+      {
+        "model": "claude-sonnet-5",
+        "label": "Claude",
+        "temperature": 0.3,
+        "verdict": "FAIL",
+        "tokens": 1364
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "label": "DS-hi",
+        "temperature": 0.7,
+        "verdict": "FAIL",
+        "tokens": 1382
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "label": "Gemini",
+        "temperature": 0.3,
+        "verdict": "FAIL",
+        "tokens": 2929
+      }
+    ],
+    "votes": [
+      "FAIL",
+      "FAIL",
+      "FAIL"
+    ],
+    "fail_count": 3,
+    "pass_count": 0,
+    "final_verdict": "FAIL",
+    "correct": true,
+    "total_tokens": 5675,
+    "deep_dive": null
+  },
+  {
+    "case": "S2",
+    "title": "compute_variance 灾难性抵消",
+    "z_score": 8,
+    "ground_truth": "FAIL",
+    "combination": "C2_Claude_DS_Gemini",
+    "judges": [
+      {
+        "model": "claude-sonnet-5",
+        "label": "Claude",
+        "temperature": 0.3,
+        "verdict": "FAIL",
+        "tokens": 2286
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "label": "DS-hi",
+        "temperature": 0.7,
+        "verdict": "FAIL",
+        "tokens": 1223
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "label": "Gemini",
+        "temperature": 0.3,
+        "verdict": "FAIL",
+        "tokens": 2287
+      }
+    ],
+    "votes": [
+      "FAIL",
+      "FAIL",
+      "FAIL"
+    ],
+    "fail_count": 3,
+    "pass_count": 0,
+    "final_verdict": "FAIL",
+    "correct": true,
+    "total_tokens": 5796,
+    "deep_dive": null
+  },
+  {
+    "case": "S6",
+    "title": "浅拷贝陷阱 / duplicate_list",
+    "z_score": 6,
+    "ground_truth": "FAIL",
+    "combination": "C2_Claude_DS_Gemini",
+    "judges": [
+      {
+        "model": "claude-sonnet-5",
+        "label": "Claude",
+        "temperature": 0.3,
+        "verdict": "FAIL",
+        "tokens": 1247
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "label": "DS-hi",
+        "temperature": 0.7,
+        "verdict": "FAIL",
+        "tokens": 972
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "label": "Gemini",
+        "temperature": 0.3,
+        "verdict": "FAIL",
+        "tokens": 1203
+      }
+    ],
+    "votes": [
+      "FAIL",
+      "FAIL",
+      "FAIL"
+    ],
+    "fail_count": 3,
+    "pass_count": 0,
+    "final_verdict": "FAIL",
+    "correct": true,
+    "total_tokens": 3422,
+    "deep_dive": null
+  },
+  {
+    "case": "case10",
+    "title": "SQL注入",
+    "z_score": 7,
+    "ground_truth": "FAIL",
+    "combination": "C2_Claude_DS_Gemini",
+    "judges": [
+      {
+        "model": "claude-sonnet-5",
+        "label": "Claude",
+        "temperature": 0.3,
+        "verdict": "FAIL",
+        "tokens": 2305
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "label": "DS-hi",
+        "temperature": 0.7,
+        "verdict": "FAIL",
+        "tokens": 1592
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "label": "Gemini",
+        "temperature": 0.3,
+        "verdict": "FAIL",
+        "tokens": 2433
+      }
+    ],
+    "votes": [
+      "FAIL",
+      "FAIL",
+      "FAIL"
+    ],
+    "fail_count": 3,
+    "pass_count": 0,
+    "final_verdict": "FAIL",
+    "correct": true,
+    "total_tokens": 6330,
+    "deep_dive": null
+  },
+  {
+    "case": "S3",
+    "title": "代码质量问题 / process_orders",
+    "z_score": 3,
+    "ground_truth": "PASS",
+    "combination": "C2_Claude_DS_Gemini",
+    "judges": [
+      {
+        "model": "claude-sonnet-5",
+        "label": "Claude",
+        "temperature": 0.3,
+        "verdict": "PASS",
+        "tokens": 1725
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "label": "DS-hi",
+        "temperature": 0.7,
+        "verdict": "FAIL",
+        "tokens": 2146
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "label": "Gemini",
+        "temperature": 0.3,
+        "verdict": "FAIL",
+        "tokens": 4678
+      }
+    ],
+    "votes": [
+      "PASS",
+      "FAIL",
+      "FAIL"
+    ],
+    "fail_count": 2,
+    "pass_count": 1,
+    "final_verdict": "FAIL",
+    "correct": false,
+    "total_tokens": 8549,
+    "deep_dive": null
+  }
+]

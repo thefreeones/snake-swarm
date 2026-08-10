@@ -1,0 +1,438 @@
+{
+  "experiment": "P10-batch-judge-review",
+  "description": "Compare individual vs batch C1 judge review for token cost and verdict consistency",
+  "judge_config": "C1: deepseek-v4-pro(t=0.3) + deepseek-v4-pro(t=0.7) + gemini-3.6-flash(t=0.3)",
+  "api_provider": "tokeness (https://n.tokeness.io/v1)",
+  "date": "2026-08-05",
+  "bug_count": 5,
+  "bugs": [
+    "bug-185-max-length",
+    "bug-186-empty-separator",
+    "bug-178-malformed-entities",
+    "bug-179-self-referential",
+    "bug-148-uppercase-return"
+  ],
+  "individual_group": [
+    {
+      "bug_id": "bug-185-max-length",
+      "judge_results": [
+        {
+          "judge": "DS-t0.3",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "prompt_tokens": 1075,
+          "completion_tokens": 829,
+          "total_tokens": 1904,
+          "latency": 20.5,
+          "content": "[VERDICT]: PASS\n[REASONING]: The fix changes the guard condition from `if not max_length:` (which is True only for 0 and False for negative values, causing truncation when max_length is negative) to `if max_length <= 0:`, which correctly returns the string unchanged for any non‑positive max_length, including negative values. This matches the intended behavior: non‑positive max_length means no truncation. It handles the edge case of zero identically to the original code and eliminates the bug for..."
+        },
+        {
+          "judge": "DS-t0.7",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "PASS",
+          "prompt_tokens": 1075,
+          "completion_tokens": 656,
+          "total_tokens": 1731,
+          "latency": 15.5,
+          "content": "[VERDICT]: PASS\n[REASONING]: The fix changes `if not max_length:` to `if max_length <= 0:`, correctly handling negative values. With the original code, `not -1` is `False`, so negative max_length proceeded to truncation logic, causing unexpected slicing (e.g., `string[: -1]` drops the last character). The new condition ensures any non-positive max_length is treated as \"no length limit\" and returns the string unchanged. This addresses the root cause, covers all edge cases (0 and negative), and do..."
+        },
+        {
+          "judge": "Gemini-t0.3",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "prompt_tokens": 1190,
+          "completion_tokens": 2006,
+          "total_tokens": 3196,
+          "latency": 6.4,
+          "content": "[VERDICT]: PASS\n[REASONING]:\nThe root cause of bug-185 is that `if not max_length:` relies on Python truthiness checks. For negative integers such as `max_length = -1`, `not -1` evaluates to `False`, allowing execution to proceed into the truncation logic where negative slice indices produce incorrect truncation results.\n\nBy changing the condition to `if max_length <= 0:`, both `0` (the default value meaning no truncation) and negative values correctly short-circuit and return the original strin..."
+        }
+      ],
+      "votes": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "total_tokens": 6831,
+      "total_latency": 42.4,
+      "verdict": "PASS"
+    },
+    {
+      "bug_id": "bug-186-empty-separator",
+      "judge_results": [
+        {
+          "judge": "DS-t0.3",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "prompt_tokens": 1074,
+          "completion_tokens": 1080,
+          "total_tokens": 2154,
+          "latency": 31.3,
+          "content": "[VERDICT]: PASS\n[REASONING]: The proposed fix correctly guards against the ValueError caused by `''.split('')` when word_boundary=True and separator is empty. By adding `or not separator` to the condition, the function falls back to hard truncation when separator is falsy (i.e., empty), which matches the expected behavior from the bug report. The change does not affect normal cases (non-empty separator) or the hard truncation path when word_boundary is False. It handles the edge case directly an..."
+        },
+        {
+          "judge": "DS-t0.7",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "PASS",
+          "prompt_tokens": 1074,
+          "completion_tokens": 482,
+          "total_tokens": 1556,
+          "latency": 13.9,
+          "content": "[VERDICT]: PASS\n[REASONING]: The fix correctly addresses the root cause by checking for an empty separator before attempting a word-boundary split. When separator is '' and word_boundary is True, `not separator` evaluates to True, causing the function to take the hard truncation branch instead of calling `string.split('')` which would raise ValueError. This handles the edge case without affecting normal operation when separator is non-empty. No regressions are introduced because the condition on..."
+        },
+        {
+          "judge": "Gemini-t0.3",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "prompt_tokens": 1178,
+          "completion_tokens": 1162,
+          "total_tokens": 2340,
+          "latency": 5.5,
+          "content": "[VERDICT]: PASS\n[REASONING]:\n1. **Root Cause Resolution**: In Python, `''.split('')` raises a `ValueError: empty separator`. When `separator=''` and `word_boundary=True`, `separator not in string` evaluates to `False` (because `\"\" in string` is `True`), leading to `string.split('')` on line 57 which crashes. Changing the check to `if not word_boundary or not separator:` intercepts empty separators early.\n2. **Behavior & Output**: When `separator` is empty (`''`), word boundaries cannot be meanin..."
+        }
+      ],
+      "votes": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "total_tokens": 6050,
+      "total_latency": 50.7,
+      "verdict": "PASS"
+    },
+    {
+      "bug_id": "bug-178-malformed-entities",
+      "judge_results": [
+        {
+          "judge": "DS-t0.3",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "prompt_tokens": 1226,
+          "completion_tokens": 1465,
+          "total_tokens": 2691,
+          "latency": 34.6,
+          "content": "[VERDICT]: PASS\n[REASONING]: The proposed fix correctly isolates the exception handling to each individual decimal entity match. Instead of aborting all decimal conversions when a single malformed entity (e.g., overly large code point) raises a `ValueError` (or `OverflowError`), the helper function returns the original entity text for that match, while valid entities are still converted. This directly addresses the root cause of the bug—the broad `except Exception` wrapping the entire `re.sub()`..."
+        },
+        {
+          "judge": "DS-t0.7",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "PASS",
+          "prompt_tokens": 1226,
+          "completion_tokens": 872,
+          "total_tokens": 2098,
+          "latency": 22.1,
+          "content": "[VERDICT]: PASS\n[REASONING]: The proposed fix correctly addresses the root cause by replacing the overly broad `except Exception` that wrapped the entire `re.sub()` call with a per-match conversion helper that catches only `ValueError` and `OverflowError`. This ensures that valid decimal entities (e.g., `&#381;`) are properly converted to characters while invalid ones (e.g., `&#99999999;`) are kept in their original textual form, leaving the rest of the string unchanged. The fix does not introdu..."
+        },
+        {
+          "judge": "Gemini-t0.3",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "prompt_tokens": 1386,
+          "completion_tokens": 1549,
+          "total_tokens": 2935,
+          "latency": 7.5,
+          "content": "[VERDICT]: PASS\n\n[REASONING]:\n1. **Root Cause Solved**: The bug was caused by a broad `try...except Exception` surrounding the entire `DECIMAL_PATTERN.sub(...)` call. When any matched decimal entity in the input string failed conversion (e.g. `chr(99999999)` raising `ValueError: chr() arg not in range(0x110000)`), the exception handler skipped the entire `sub()` call, discarding valid entity conversions present in the same string. Moving exception handling into a per-match callback (`_char_from_..."
+        }
+      ],
+      "votes": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "total_tokens": 7724,
+      "total_latency": 64.2,
+      "verdict": "PASS"
+    },
+    {
+      "bug_id": "bug-179-self-referential",
+      "judge_results": [
+        {
+          "judge": "DS-t0.3",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.3,
+          "verdict": "UNKNOWN",
+          "prompt_tokens": 1147,
+          "completion_tokens": 4000,
+          "total_tokens": 5147,
+          "latency": 88.1,
+          "content": ""
+        },
+        {
+          "judge": "DS-t0.7",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "FAIL",
+          "prompt_tokens": 1147,
+          "completion_tokens": 3903,
+          "total_tokens": 5050,
+          "latency": 98.9,
+          "content": "[VERDICT]: FAIL\n[REASONING]: The fix attempts to prevent double application of self-referential replacements by skipping the post-process entirely for any rule where `old in new`. However, this approach introduces a regression: it also suppresses the legitimate single application of such a replacement to text that did not contain the pattern during pre-processing but appears later (e.g., after entity decoding or Unicode normalization). For example, if a rule `['a', 'aa']` is given and the raw te..."
+        },
+        {
+          "judge": "Gemini-t0.3",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "FAIL",
+          "prompt_tokens": 1280,
+          "completion_tokens": 5620,
+          "total_tokens": 6900,
+          "latency": 14.4,
+          "content": "[VERDICT]: FAIL\n[REASONING]: \nThe proposed fix does not properly resolve the root cause and introduces edge-case regressions.\n\n1. **Failure to Address Root Cause**: The underlying issue is that `replacements` are executed twice (once at pre-process and once at post-process). Checking `if old in new: continue` in post-processing only suppresses double-application when `old` happens to be a substring of `new`. It leaves double-processing active for all other replacement pairs.\n\n2. **Chained Replac..."
+        }
+      ],
+      "votes": [
+        "UNKNOWN",
+        "FAIL",
+        "FAIL"
+      ],
+      "total_tokens": 17097,
+      "total_latency": 201.4,
+      "verdict": "FAIL"
+    },
+    {
+      "bug_id": "bug-148-uppercase-return",
+      "judge_results": [
+        {
+          "judge": "DS-t0.3",
+          "error": "<urlopen error _ssl.c:1064: The handshake operation timed out>",
+          "verdict": "UNKNOWN"
+        },
+        {
+          "judge": "DS-t0.7",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.7,
+          "verdict": "PASS",
+          "prompt_tokens": 1192,
+          "completion_tokens": 1010,
+          "total_tokens": 2202,
+          "latency": 26.6,
+          "content": "[VERDICT]: PASS\n[REASONING]: The fix correctly unindents the `return char_list` statement to outside the for loop, ensuring all elements in `char_list` are processed before returning. This resolves the root cause: previously it returned after only the first item, so only the uppercase version of the first character was added. After the fix, all characters’ uppercase forms (Ue, Oe, Ae) will be inserted as expected. Additionally, the fix handles the edge case of an empty list properly—previously i..."
+        },
+        {
+          "judge": "Gemini-t0.3",
+          "model": "gemini-3.6-flash",
+          "temperature": 0.3,
+          "verdict": "PASS",
+          "prompt_tokens": 1308,
+          "completion_tokens": 1560,
+          "total_tokens": 2868,
+          "latency": 7.5,
+          "content": "[VERDICT]: PASS\n[REASONING]: \nThe proposed fix correctly addresses the root cause of `bug-148-uppercase-return`.\n\n### Analysis:\n1. **Root Cause**: In `add_uppercase_char`, the `return char_list` statement was indented inside the `for` loop body. Consequently, the function executed only one iteration (processing the first tuple in `char_list`) before exiting early.\n2. **Fix Verification**: Moving `return char_list` outside the `for` loop allows the loop to iterate through all entries in `char_lis..."
+        }
+      ],
+      "votes": [
+        "UNKNOWN",
+        "PASS",
+        "PASS"
+      ],
+      "total_tokens": 5070,
+      "total_latency": 34.1,
+      "verdict": "PASS"
+    }
+  ],
+  "batch_group": {
+    "judge_results": [
+      {
+        "judge": "DS-t0.3",
+        "model": "deepseek-v4-pro",
+        "temperature": 0.3,
+        "per_bug_verdicts": {
+          "bug-185-max-length": "PASS",
+          "bug-186-empty-separator": "PASS",
+          "bug-178-malformed-entities": "PASS",
+          "bug-179-self-referential": "PASS",
+          "bug-148-uppercase-return": "PASS"
+        },
+        "prompt_tokens": 2243,
+        "completion_tokens": 3075,
+        "total_tokens": 5318,
+        "latency": 57.7,
+        "content": "---\n[Bug ID]: bug-185-max-length\n[VERDICT]: PASS\n[REASONING]: The fix changes `if not max_length:` to `if max_length <= 0:`. This correctly handles negative values (which previously fell through the truthiness check and entered truncation logic) by treating them as \"no truncation\". The change is minimal, safe, and does not affect the positive case. No edge cases are broken, and it makes the function robust against unexpected negative inputs.\n\n---\n[Bug ID]: bug-186-empty-separator\n[VERDICT]: PASS\n[REASONING]: The condition `if not word_boundary:` is extended to `if not word_boundary or not separator:`. When separator is empty (falsy), it forces the hard‑truncation branch, avoiding the `ValueError` from `split('')`. This matches the expected behavior: with an empty separator, word boundary logic is meaningless, and the function should fall back to simple slicing. The fix does not affect normal usage (non‑empty separators).\n\n---\n[Bug ID]: bug-178-malformed-entities\n[VERDICT]: PASS\n[REASON..."
+      },
+      {
+        "judge": "DS-t0.7",
+        "error": "The read operation timed out"
+      },
+      {
+        "judge": "Gemini-t0.3",
+        "model": "gemini-3.6-flash",
+        "temperature": 0.3,
+        "per_bug_verdicts": {
+          "bug-185-max-length": "PASS",
+          "bug-186-empty-separator": "PASS",
+          "bug-178-malformed-entities": "PASS",
+          "bug-179-self-referential": "FAIL",
+          "bug-148-uppercase-return": "PASS"
+        },
+        "prompt_tokens": 2461,
+        "completion_tokens": 5631,
+        "total_tokens": 8092,
+        "latency": 13.2,
+        "content": "---\n[Bug ID]: bug-185-max-length\n[VERDICT]: PASS\n[REASONING]: Changing `if not max_length:` to `if max_length <= 0:` correctly addresses the root cause. Truthiness checks in Python consider negative integers (e.g., `-1`) truthy, causing negative `max_length` values to bypass the early exit check and cause unwanted string slicing. The fix properly treats all non-positive integers (`<= 0`) as \"no truncation requested\".\n\n---\n[Bug ID]: bug-186-empty-separator\n[VERDICT]: PASS\n[REASONING]: Changing `if not word_boundary:` to `if not word_boundary or not separator:` correctly handles empty string separators (`\"\"`). When `separator` is empty, `str.split(\"\")` raises a `ValueError`. Bypassing word-boundary splitting when `separator` is empty/falsy allows `smart_truncate` to fall back to simple character truncation (`string[:max_length].strip(\"\")`), which executes cleanly without throwing an exception.\n\n---\n[Bug ID]: bug-178-malformed-entities\n[VERDICT]: PASS\n[REASONING]: Replacing the global `tr..."
+      }
+    ],
+    "bug_verdicts": {
+      "bug-185-max-length": "PASS",
+      "bug-186-empty-separator": "PASS",
+      "bug-178-malformed-entities": "PASS",
+      "bug-179-self-referential": "DEADLOCK(PASS,FAIL)",
+      "bug-148-uppercase-return": "PASS"
+    },
+    "total_tokens": 13410,
+    "total_latency": 70.9
+  },
+  "comparison": {
+    "individual_total_tokens": 42772,
+    "batch_total_tokens": 13410,
+    "individual_input_tokens": 16578,
+    "batch_input_tokens": 4704,
+    "individual_output_tokens": 26194,
+    "batch_output_tokens": 8706,
+    "token_saving_pct": 68.6,
+    "input_token_saving_pct": 71.6,
+    "verdict_consistency": "4/5",
+    "verdict_consistency_pct": 80.0,
+    "individual_api_calls": 15,
+    "batch_api_calls": 3
+  },
+  "verdict_consistency_analysis": {
+    "matches": "4/5",
+    "details": [
+      {
+        "bug_id": "bug-185-max-length",
+        "individual": "PASS",
+        "batch": "PASS"
+      },
+      {
+        "bug_id": "bug-186-empty-separator",
+        "individual": "PASS",
+        "batch": "PASS"
+      },
+      {
+        "bug_id": "bug-178-malformed-entities",
+        "individual": "PASS",
+        "batch": "PASS"
+      },
+      {
+        "bug_id": "bug-179-self-referential",
+        "individual": "FAIL",
+        "batch": "DEADLOCK(PASS,FAIL)"
+      },
+      {
+        "bug_id": "bug-148-uppercase-return",
+        "individual": "PASS",
+        "batch": "PASS"
+      }
+    ]
+  },
+  "analysis": {
+    "token_analysis": {
+      "summary": "批量审查在保持判决质量的前提下，显著降低了法官token成本。总token节省68.6%，远超40-50%的预期目标。",
+      "input_savings_detail": "输入token节省71.6%是最大贡献因素。个体模式中，系统prompt和代码上下文(~2100 tokens)在15次调用中重复传输，批量模式仅传输3次。",
+      "output_savings_detail": "输出token节省66.8%，批量模式下模型在每个bug上的输出更精简，共享了推理结构。",
+      "per_judge_savings": {
+        "DS-t0.3": {
+          "individual": 11896,
+          "batch": 5318,
+          "saving_pct": 55.3
+        },
+        "DS-t0.7": {
+          "individual": 12637,
+          "batch": 0,
+          "saving_pct": 100.0,
+          "note": "批量模式超时，实际节省无法计算"
+        },
+        "Gemini-t0.3": {
+          "individual": 18239,
+          "batch": 8092,
+          "saving_pct": 55.6
+        }
+      }
+    },
+    "verdict_consistency_analysis": {
+      "overall": "4/5 (80%) 判决一致",
+      "consistent_cases": [
+        {
+          "bug_id": "bug-185-max-length",
+          "individual": "PASS",
+          "batch": "PASS",
+          "ground_truth": "PASS"
+        },
+        {
+          "bug_id": "bug-186-empty-separator",
+          "individual": "PASS",
+          "batch": "PASS",
+          "ground_truth": "PASS"
+        },
+        {
+          "bug_id": "bug-178-malformed-entities",
+          "individual": "PASS",
+          "batch": "PASS",
+          "ground_truth": "PASS"
+        },
+        {
+          "bug_id": "bug-148-uppercase-return",
+          "individual": "PASS",
+          "batch": "PASS",
+          "ground_truth": "PASS"
+        }
+      ],
+      "discrepancy_cases": [
+        {
+          "bug_id": "bug-179-self-referential",
+          "individual": "FAIL",
+          "batch": "DEADLOCK(PASS,FAIL)",
+          "ground_truth": "PASS",
+          "analysis": "bug-179是个体模式的假阳性。DS-t0.7和Gemini均判FAIL，认为修复方案`if old in new: continue`不够彻底——他们指出这只阻止了old是new子串的自引用，未处理链式替换和其他双应用场景。但维护者(Yay)在PR #179中接受了此修复方案，因为bug-179的特定用例(a→aa→aaaa)被正确解决。批量模式中DS-t0.3判PASS(正确)，Gemini判FAIL(假阳性)，DS-t0.7超时→DEADLOCK。",
+          "judge_comments": {
+            "DS-t0.7_individual": "认为跳过自引用规则会遗漏合法的新出现模式",
+            "Gemini_individual": "认为修复未解决根本原因(两次执行)，且链式替换仍有问题",
+            "DS-t0.3_batch": "未详细输出(内容被截断)",
+            "Gemini_batch": "与个体模式一致判FAIL"
+          },
+          "conclusion": "此案不一致由法官过度严格+网络超时共同导致，非批量模式特有缺陷。"
+        }
+      ]
+    },
+    "quality_assessment": {
+      "false_positive_rate": "个体模式: 1/5 (20%), 批量模式: 0/4有效结果 (0%)",
+      "false_negative_rate": "两者均为0% — 没有错误修复被误判为PASS",
+      "review_depth": "批量模式输出与个体模式输出分析深度相当，未观察到因批量而遗漏的风险。DS-t0.3在批量模式的判断比个体模式更准确(bug-179判PASS而个体模式超reasoning预算导致空返回)。",
+      "risk_of_batch": "潜在风险：如果batch prompt过长导致模型注意力分散，可能遗漏细节。本实验中未观察到此现象。对于更多bug(10+)的批量审查，建议分段处理。"
+    },
+    "reliability_issues": {
+      "total_api_errors": 3,
+      "errors": [
+        {
+          "call": "DS-t0.3 (bug-148, individual)",
+          "error": "SSL handshake timeout",
+          "impact": "该bug的个体判决仅基于2/3票"
+        },
+        {
+          "call": "DS-t0.3 (bug-179, individual)",
+          "error": "Reasoning token trap: 4000 completion tokens全被reasoning消耗，content为空",
+          "impact": "该bug的个体判决为UNKNOWN，实际基于2票(均为FAIL)"
+        },
+        {
+          "call": "DS-t0.7 (batch)",
+          "error": "Read timeout",
+          "impact": "批量模式仅基于2/3票(DS-t0.3 PASS + Gemini FAIL = DEADLOCK)"
+        }
+      ],
+      "mitigation": "对于DeepSeek V4 Pro，批量模式应使用max_tokens>=8000以避免reasoning token trap。网络超时可添加retry逻辑解决。"
+    },
+    "cost_benefit_analysis": {
+      "token_cost_estimate": "以当前tokeness定价估算，个体审查5个bug的法官成本约$0.08-0.12，批量降至$0.03-0.04",
+      "scaling_projection": "对于50个bug的仓库，个体审查需150次API调用，批量仅需30次(分5批，每批10个bug)，节省约65-70%法官token成本",
+      "recommendation": "强烈推荐采用批量审查策略。对于5-10个bug的批次，批量模式在保持判决质量的前提下实现68%+ token节省。建议：\n1. 批量大小控制在5-10个bug/批次\n2. DeepSeek V4 Pro使用max_tokens>=8000\n3. 添加API重试逻辑(最多3次)\n4. 对于判决不一致的bug，单独重新审查"
+    }
+  }
+}

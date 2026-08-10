@@ -1,0 +1,21 @@
+name: 🐍 蛇群自动修复
+
+on:
+  issues:
+    types: [opened, labeled]
+
+jobs:
+  snakes-fix:
+    if: |
+      github.event.action == 'labeled' && github.event.label.name == 'bug' ||
+      contains(github.event.issue.labels.*.name, 'bug') ||
+      contains(github.event.issue.title, 'bug') ||
+      contains(github.event.issue.title, '修复')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 蛇群自动修复
+        uses: ./  # 或 snakes/snakes-action@v1
+        with:
+          api-key: ${{ secrets.SNAKES_API_KEY }}

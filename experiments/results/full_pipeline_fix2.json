@@ -1,0 +1,62 @@
+[
+  {
+    "case": "S3",
+    "gt": "PASS",
+    "final_verdict": "PASS",
+    "correct": true,
+    "total_tokens": 6310,
+    "votes": [
+      "PASS",
+      "PASS",
+      "PASS"
+    ],
+    "deep_dive": null,
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "PASS",
+        "tokens": 1865
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "PASS",
+        "tokens": 1865
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "verdict": "PASS",
+        "tokens": 1657
+      }
+    ]
+  },
+  {
+    "case": "S4",
+    "gt": "PASS",
+    "final_verdict": "PASS",
+    "correct": true,
+    "total_tokens": 4699,
+    "votes": [
+      "PASS",
+      "PASS",
+      "PASS"
+    ],
+    "deep_dive": null,
+    "judges": [
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "PASS",
+        "tokens": 1208
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "verdict": "PASS",
+        "tokens": 793
+      },
+      {
+        "model": "gemini-3.6-flash",
+        "verdict": "PASS",
+        "tokens": 1738
+      }
+    ]
+  }
+]

@@ -1,0 +1,56 @@
+{
+  "phase": "v0.4c 蛇改进回路原型",
+  "training_bugs": [
+    "bug-185-max-length",
+    "bug-186-empty-separator",
+    "bug-178-malformed-entities"
+  ],
+  "testing_bugs": [
+    "bug-179-self-referential",
+    "bug-148-uppercase-return"
+  ],
+  "patterns_extracted": 3,
+  "patterns": [
+    {
+      "id": "truthiness_check",
+      "name": "Python真值判断对数值参数的错误处理",
+      "category": "条件判断",
+      "confidence": 0.7,
+      "sources": [
+        "bug-185-max-length"
+      ]
+    },
+    {
+      "id": "empty_separator_split",
+      "name": "字符串split操作缺少空分隔符守卫",
+      "category": "边界条件",
+      "confidence": 0.7,
+      "sources": [
+        "bug-186-empty-separator"
+      ]
+    },
+    {
+      "id": "broad_except_in_loop",
+      "name": "循环体内的过度宽泛异常捕获",
+      "category": "异常处理",
+      "confidence": 0.7,
+      "sources": [
+        "bug-178-malformed-entities"
+      ]
+    }
+  ],
+  "testing_results": {
+    "bugs_with_hits": 0,
+    "bugs_without_hits": 2,
+    "estimated_token_savings_pct": "0% on hit bugs"
+  },
+  "cost_projection": {
+    "baseline_avg_tokens_per_bug": 8400,
+    "projection_50_bugs": {
+      "estimated_patterns": "15-20",
+      "estimated_hit_rate": "50-70%",
+      "estimated_cost_reduction": "20-30%",
+      "avg_tokens_per_bug_after_learning": "~6300-6720"
+    }
+  }
+}

@@ -1,0 +1,32 @@
+```python
+import math
+
+
+def safe_divide(a, b) -> int | None:
+    if isinstance(a, bool) or isinstance(b, bool):
+        return None
+    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
+        return None
+    if math.isinf(a) or math.isnan(a) or math.isinf(b) or math.isnan(b):
+        return None
+    if b == 0:
+        return None
+
+    if isinstance(a, int) and isinstance(b, int):
+        if a % b == 0:
+            return a // b
+        return None
+
+    try:
+        res = a / b
+    except (OverflowError, ZeroDivisionError):
+        return None
+
+    if math.isinf(res) or math.isnan(res):
+        return None
+
+    if res.is_integer():
+        return int(res)
+
+    return None
+```

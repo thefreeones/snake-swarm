@@ -1,0 +1,192 @@
+{
+  "experiment": "蛇群P1-异构组合对比",
+  "description": "对比 C1(DS+DS+Gemini) 和 C2(Claude+DS+Gemini) 两种法官组合的检出率",
+  "date": "2026-08-04T14:10:12.996424",
+  "api": {
+    "base": "https://n.tokeness.io/v1/chat/completions"
+  },
+  "cases_tested": [
+    "S2",
+    "case8"
+  ],
+  "results": [
+    {
+      "case": "S2",
+      "title": "领域知识 / 数值稳定性 — 灾难性抵消",
+      "error_type": "L3: domain knowledge / numerical stability",
+      "z_score": 8,
+      "ground_truth": "FAIL",
+      "snake_head_analysis": "# 任务分析：compute_variance(data) — 总体方差计算\n\n## 1. 任务分解\n\n1. **输入校验**：检查 `data` 是否为可迭代对象，元素是否为数值类型\n2. **空/异常输入处理**：判断长度是否为 0（或过短）\n3. **计算均值**：`mean = sum(data) / n`\n4. **计算离差平方和**：对每个元素求 `(x - mean) ** 2` 并累加\n5. **计算总体方差**：`variance = sum_of_squares / n`（注意：总体方差除以 n，不是 n-1）\n6. **返回结果**：确定返回类型（float），是否需要处理精度问题\n\n## 2. 每步风险点\n\n**步骤1 输入校验**\n- 边界：`data` 为 `None`、字符串、字典等非预期类型\n- 异常输入：包含 `NaN`、`inf`、`None` 混入数值列表\n- 隐含假设：默认元素都是 `int`/`float`，若含布尔值（`True`/`False` 会被当作 1/0）可能产生非预期结果\n\n**步骤2 空/过短输入**\n- 边界：`len(data) == 0` 会导致除零错误（ZeroDivisionError）\n- 边界：`len(data) == 1`，方差理论上是 0，但需明确这是\"总体方差\"（除以 n）而非\"样本方差\"（除以 n-1），单元素时两者语义不同，样本方差在 n=1 时无定义（除零），总体方差则为 0，要确认需求是哪一种\n- 隐含假设：任务要求\"总体方差\"，需在实现和文档中明确区分于样本方差，避免调用者误用\n\n**步骤3 计算均值**\n- 性能陷阱：大数据集下 `sum(data)` 可能存在浮点数精度累积误差\n- 边界：数据量极大时可能有性能问题（是否需要支持流式/增量计算，如 Welford 算法）\n\n**步骤4 离差平方和**\n- 性能陷阱：两次遍历数据（一次算均值，一次算平方差）对超大数据集有性能开销，可考虑单遍算法（如 Welford's online algorithm）以提升数值稳定性和性能\n- 异常输入：极大或极小的数值可能导致平方运算时的浮点溢出或精度损失\n\n**步骤5 计算方差**\n- 隐含假设：这里最容易出错的地方——总体方差公式是 `Σ(x-mean)² / n`，样本方差是 `Σ(x-mean)² / (n-1)`。如果误用样本方差公式（很多人惯性写 n-1），会造成逻辑错误，这是本任务**最核心的风险点**\n- 边界：n=0 时除零\n\n**步骤6 返回结果**\n- 精度问题：是否需要指定返回精度（保留几位小数）\n- 类型问题：输入为整数列表时，是否需要强制转 float 避免整数除法问题（Python3 中 `/` 已是浮点除法，但仍需确认版本）\n\n## 3. 不确定性标记\n\n- **高**：总体方差 vs 样本方差的除数选择（n vs n-1），这是任务描述里唯一容易产生歧义的核心逻辑点，必须在代码注释和测试用例中明确验证\n- **中**：空输入/单元素输入的处理策略（抛异常 vs 返回 0 vs 返回 None），需要与调用方约定好行为\n- **中**：是否需要支持 NumPy 数组、Pandas Series 等非原生 list 类型的输入，若不确定使用场景，建议先支持纯 list 并做类型检查\n- **低**：性能优化（单遍 Welford 算法）在小数据集场景下几乎无必要，除非明确有大数据量或流式计算需求，可作为后续优化项而非本次必做项\n\n建议：先写清楚 docstring 说明\"本函数计算总体方差（除以 n）\"，并补充单元测试覆盖空列表、单元素、全部相同值、含负数等场景。",
+      "p0_c1_verdict": "PASS",
+      "combinations": {
+        "C1_DS_DS_Gemini": {
+          "judges": [
+            {
+              "model": "deepseek-v4-pro",
+              "label": "DS-lo",
+              "temperature": 0.3,
+              "verdict": "FAIL",
+              "tokens": 2494
+            },
+            {
+              "model": "deepseek-v4-pro",
+              "label": "DS-hi",
+              "temperature": 0.7,
+              "verdict": "FAIL",
+              "tokens": 2451
+            },
+            {
+              "model": "gemini-3.6-flash",
+              "label": "Gemini",
+              "temperature": 0.3,
+              "verdict": "FAIL",
+              "tokens": 3842
+            }
+          ],
+          "votes": [
+            "FAIL",
+            "FAIL",
+            "FAIL"
+          ],
+          "deep_dive": null,
+          "final_verdict": "FAIL",
+          "correct": true
+        },
+        "C2_Claude_DS_Gemini": {
+          "judges": [
+            {
+              "model": "claude-sonnet-5",
+              "label": "Claude",
+              "temperature": 0.3,
+              "verdict": "FAIL",
+              "tokens": 3641
+            },
+            {
+              "model": "deepseek-v4-pro",
+              "label": "DS-hi",
+              "temperature": 0.7,
+              "verdict": "FAIL",
+              "tokens": 3048
+            },
+            {
+              "model": "gemini-3.6-flash",
+              "label": "Gemini",
+              "temperature": 0.3,
+              "verdict": "FAIL",
+              "tokens": 3704
+            }
+          ],
+          "votes": [
+            "FAIL",
+            "FAIL",
+            "FAIL"
+          ],
+          "deep_dive": null,
+          "final_verdict": "FAIL",
+          "correct": true
+        }
+      },
+      "timestamp": "2026-08-04T14:07:14.284977",
+      "reasoning_plugin": {
+        "test_input": [
+          10000000001.0,
+          10000000002.0,
+          10000000003.0
+        ],
+        "actual_output": 0.0,
+        "reference_output": 0.6666666666666666,
+        "explanation": "该测试用例选择了三个非常接近的大数(1e10+1, 1e10+2, 1e10+3)。它们的方差理论上约为0.667(均值附近均匀分布±1)。但由于平方项sum_x2和sum_x*sum_x/n都是~1e20量级的大数，相减时浮点精度不足，导致灾难性抵消，实际输出0.0（甚至可能为负）。这是典型的数值稳定性缺陷——功能逻辑正确，但数值结果完全错误。"
+      }
+    },
+    {
+      "case": "case8",
+      "title": "变量遮蔽 / KeyError",
+      "error_type": "L1: logic error / variable-shadowing",
+      "z_score": 2,
+      "ground_truth": "FAIL",
+      "snake_head_analysis": "## 1. 任务分解\n\n1. 明确函数签名与输入契约：`filter_adults(people: list[dict]) -> list[dict]`\n2. 确定\"年龄\"字段的取值来源：假设每个字典都有 `age` 键\n3. 编写核心筛选逻辑：遍历列表，判断 `age >= 18`\n4. 处理异常/边界数据（缺失字段、类型错误、None 值等）\n5. 决定返回值语义：新列表（不修改原数据）还是原地过滤\n6. 编写单元测试覆盖正常/边界/异常场景\n\n## 2. 每步风险点\n\n**步骤1（签名与契约）**\n- 隐含假设：调用者保证传入的是列表，且每个元素是字典。若传入元组、生成器或 None，行为未定义。\n- 建议：在文档字符串中明确输入类型要求，不做过度防御性编码。\n\n**步骤2（age 字段来源）**\n- 风险：字典可能没有 `age` 键（KeyError）；也可能 `age` 为 `None`、字符串（`\"20\"`）、浮点数、负数。\n- 隐含假设：`age` 是可比较的数值类型。字符串年龄会导致 `TypeError`（字符串和 int 比较）或逻辑错误（字符串比较是按字典序，不是数值）。\n\n**步骤3（核心筛选逻辑）**\n- 边界条件：`age == 18` 应算作成年（`>=` 而非 `>`），需确认业务口径无歧义。\n- 性能陷阱：若 `people` 数据量巨大，用列表推导式一次性生成结果会占用内存；若下游只需迭代一次，可考虑生成器（`yield`），但会改变返回类型语义，需要和调用方约定。\n\n**步骤4（异常处理）**\n- 决策点：遇到缺失或非法 `age` 时，应该：\n  - 抛异常（严格模式，暴露数据问题）\n  - 跳过该条记录（宽松模式，容错但可能掩盖数据质量问题）\n  - 使用 `.get('age', 0)` 默认值（隐性风险：默认值本身是业务假设，容易被误用）\n- 这是最容易被忽略但影响最大的一步，需要和需求方确认。\n\n**步骤5（返回值语义）**\n- 风险：如果返回浅拷贝的字典引用，调用方修改结果列表中的字典会影响原始数据（除非明确要求深拷贝，一般不需要）。\n- 需明确：函数是纯函数（不修改输入），还是允许原地修改。\n\n**步骤6（测试）**\n- 需覆盖：空列表、全部成年、全部未成年、缺失 age 字段、age 为非数值类型、age 为浮点数（如 17.9）、age 恰好等于 18。\n\n## 3. 不确定性标记\n\n- **高**：`age` 字段缺失或类型不合法时的处理策略——这是业务逻辑决策，不是纯技术问题，必须和需求方或产品确认，否则任何实现都是\"猜测的正确\"。\n- **中**：性能优化方向（列表 vs 生成器）——取决于数据规模和调用方式，当前需求描述中未给出数据量级，暂按小规模列表处理，不引入生成器的复杂度。\n- **低**：`>=18` 的边界判断本身——需求已经写明，无歧义。\n\n**默认实现建议**（在无更多约束前提下）：假设每个字典都含合法 `age`（int/float），缺失时抛出 `KeyError`，让错误尽早暴露而不是静默吞掉，便于调试。示例：\n\n```python\ndef filter_adults(people: list[dict]) -> list[dict]:\n    \"\"\"从字典列表中筛选出 age >= 18 的记录。\n\n    假设每个字典都包含数值类型的 'age' 键；\n    缺失或非法类型会自然抛出 KeyError/TypeError。\n    \"\"\"\n    return [person for person in people if person['age'] >= 18]\n```\n\n如果你希望采用容错模式（跳过异常数据而不是抛异常），告诉我，我可以直接改成对应版本。",
+      "p0_c1_verdict": "FAIL",
+      "combinations": {
+        "C1_DS_DS_Gemini": {
+          "judges": [
+            {
+              "model": "deepseek-v4-pro",
+              "label": "DS-lo",
+              "temperature": 0.3,
+              "verdict": "FAIL",
+              "tokens": 2579
+            },
+            {
+              "model": "deepseek-v4-pro",
+              "label": "DS-hi",
+              "temperature": 0.7,
+              "verdict": "FAIL",
+              "tokens": 1821
+            },
+            {
+              "model": "gemini-3.6-flash",
+              "label": "Gemini",
+              "temperature": 0.3,
+              "verdict": "FAIL",
+              "tokens": 3753
+            }
+          ],
+          "votes": [
+            "FAIL",
+            "FAIL",
+            "FAIL"
+          ],
+          "deep_dive": null,
+          "final_verdict": "FAIL",
+          "correct": true
+        },
+        "C2_Claude_DS_Gemini": {
+          "judges": [
+            {
+              "model": "claude-sonnet-5",
+              "label": "Claude",
+              "temperature": 0.3,
+              "verdict": "PASS",
+              "tokens": 3705
+            },
+            {
+              "model": "deepseek-v4-pro",
+              "label": "DS-hi",
+              "temperature": 0.7,
+              "verdict": "FAIL",
+              "tokens": 2424
+            },
+            {
+              "model": "gemini-3.6-flash",
+              "label": "Gemini",
+              "temperature": 0.3,
+              "verdict": "PASS",
+              "tokens": 3789
+            }
+          ],
+          "votes": [
+            "PASS",
+            "FAIL",
+            "PASS"
+          ],
+          "deep_dive": {
+            "valid": true,
+            "tokens": 790
+          },
+          "final_verdict": "FAIL",
+          "correct": true
+        }
+      },
+      "timestamp": "2026-08-04T14:10:11.995665"
+    }
+  ],
+  "summary": {
+    "total_cases": 2,
+    "C1_correct": 2,
+    "C2_correct": 2,
+    "C1_detection_rate": "2/2",
+    "C2_detection_rate": "2/2",
+    "improvement": "C1 和 C2 检出率相同",
+    "total_tokens_used": 41350
+  }
+}

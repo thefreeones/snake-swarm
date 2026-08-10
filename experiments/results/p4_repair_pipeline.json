@@ -1,0 +1,127 @@
+{
+  "metadata": {
+    "experiment": "P4: 修复链路验证",
+    "description": "验证修复规划器→修复蛇→回归审计在4个典型bug用例上的修复成功率",
+    "date": "2026-08-04 23:25:42",
+    "pipeline": {
+      "planner": {
+        "model": "claude-sonnet-5",
+        "role": "修复规划器"
+      },
+      "snake": {
+        "model": "deepseek-v4-pro",
+        "temperature": 0.3,
+        "role": "修复蛇"
+      },
+      "auditor": {
+        "model": "gemini-3.6-flash",
+        "role": "回归审计者"
+      }
+    },
+    "api": {
+      "base": "https://n.tokeness.io/v1",
+      "provider": "tokeness"
+    }
+  },
+  "summary": {
+    "total_cases": 4,
+    "repair_success": 3,
+    "repair_fail": 1,
+    "success_rate": "3/4 = 75%",
+    "target_met": "边界（要求>75%，实际75%）",
+    "new_bugs_introduced": 1,
+    "new_bugs_detail": "case2: bool类型未过滤(bool是int子类导致isinstance漏检)"
+  },
+  "cases": [
+    {
+      "bug_id": "case8",
+      "title": "get_user_info KeyError",
+      "z_score": 2,
+      "root_cause": "直接键访问未防御——字典缺少name/email键时KeyError崩溃",
+      "fix_strategy": "使用.get()安全访问字典键",
+      "fixed_code": "def get_user_info(data, user_id):\n    for user in data:\n        if user['id'] == user_id:\n            return {'name': user.get('name'), 'email': user.get('email')}\n    return None",
+      "original_bug_eliminated": true,
+      "new_bugs_introduced": 0,
+      "regression_test_count": 3,
+      "regression_coverage": "充分——覆盖缺失字段、正常场景、用户不存在",
+      "auditor_verdict": "REPAIR_SUCCESS",
+      "audit_tokens": 3224,
+      "repair_status": "成功"
+    },
+    {
+      "bug_id": "S2",
+      "title": "compute_variance 灾难性抵消",
+      "z_score": 8,
+      "root_cause": "E[X²]-E[X]²灾难性抵消——大基数+小方差时两数相减精度丢失",
+      "fix_strategy": "使用Welford在线算法替代传统双乘积公式",
+      "fixed_code": "def compute_variance(data):\n    count = 0\n    mean = 0.0\n    M2 = 0.0\n    for x in data:\n        count += 1\n        delta = x - mean\n        mean += delta / count\n        delta2 = x - mean\n        M2 += delta * delta2\n    return M2 / count",
+      "original_bug_eliminated": true,
+      "new_bugs_introduced": 0,
+      "regression_test_count": 5,
+      "regression_coverage": "充分——覆盖正常数据、大基数小方差、全等值、单元素、空列表",
+      "auditor_verdict": "REPAIR_SUCCESS",
+      "audit_tokens": 4302,
+      "repair_status": "成功"
+    },
+    {
+      "bug_id": "S6",
+      "title": "浅拷贝陷阱 (duplicate_list)",
+      "z_score": 6,
+      "root_cause": "列表乘法是浅拷贝——返回的两个元素共享同一列表对象引用",
+      "fix_strategy": "使用copy.deepcopy生成独立深拷贝",
+      "fixed_code": "import copy\n\ndef duplicate_list(lst):\n    return [copy.deepcopy(lst), copy.deepcopy(lst)]",
+      "original_bug_eliminated": true,
+      "new_bugs_introduced": 0,
+      "regression_test_count": 3,
+      "regression_coverage": "充分——覆盖顶层独立性、嵌套独立性、空列表",
+      "auditor_verdict": "REPAIR_SUCCESS",
+      "audit_tokens": 2262,
+      "repair_status": "成功"
+    },
+    {
+      "bug_id": "case2",
+      "title": "safe_divide 类型校验缺失",
+      "z_score": 2,
+      "root_cause": "未校验输入类型——字符串可通过b==0检查但除法报TypeError",
+      "fix_strategy": "增加isinstance(a, (int, float))类型校验",
+      "fixed_code": "def safe_divide(a, b):\n    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):\n        return None\n    if b == 0:\n        return None\n    result = a / b\n    if result != int(result):\n        return None\n    return int(result)",
+      "original_bug_eliminated": true,
+      "new_bugs_introduced": 2,
+      "new_bugs_detail": [
+        "bool类型未过滤：Python中bool是int子类，isinstance(True, int)为True，导致safe_divide(True, 1)返回1而非None",
+        "特殊浮点值未防御：float('inf')和float('nan')可通过isinstance检查，但int(result)会抛出OverflowError/ValueError"
+      ],
+      "regression_test_count": 6,
+      "regression_coverage": "不充分——测试覆盖了bool边界但修复代码未通过该测试；未覆盖inf/nan",
+      "auditor_verdict": "REPAIR_FAIL",
+      "audit_tokens": 3117,
+      "repair_status": "失败——引入新bug（bool类型漏检）"
+    }
+  ],
+  "analysis": {
+    "strengths": [
+      "修复规划器(claude-sonnet-5)准确识别了所有4个用例的根因和修复策略",
+      "修复蛇(deepseek-v4-pro)生成的代码结构正确、可读性好",
+      "简单bug（KeyError、浅拷贝）修复100%成功",
+      "领域知识型bug（数值稳定性/Welford算法）也能正确修复"
+    ],
+    "weaknesses": [
+      "类型系统细节（Python bool是int子类）被修复蛇和审计者之间的不一致暴露",
+      "修复蛇未考虑Python语言的隐式类型继承关系",
+      "审计者(gemini-3.6-flash)有效捕获了修复蛇遗漏的边界情况",
+      "75%刚好在>75%边界，需要优化类型感知修复"
+    ],
+    "improvement_suggestions": [
+      "修复蛇增加Python类型系统知识（bool<int关系）",
+      "修复规划器应在指令中显式标注语言特定的类型陷阱",
+      "考虑对修复结果进行第二轮迭代修复（修复→审计→再修复）",
+      "增加对特殊浮点值（inf/nan）的通用防御模式"
+    ]
+  },
+  "token_usage": {
+    "planner_total": 3450,
+    "snake_total": 6903,
+    "auditor_total": 12905,
+    "grand_total": 23258
+  }
+}

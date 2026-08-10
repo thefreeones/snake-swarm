@@ -1,0 +1,337 @@
+# ============================================================
+# 蛇群四维任务建模体系 v2.1
+# ============================================================
+#
+# v2.0 → v2.1 改进:
+#   - Z_eff 查表矩阵替代线性乘法 (避免极端Z×R场景)
+#   - 上下文兼容性检查 (剖面命中但规模/领域不匹配→降置信度+偏移)
+#   - 特殊机制去重 (黑箱重写⊇回溯/回归审计)
+#   - V轴法官逻辑明确化 (V=高价值→judges=max(judges,3))
+#   - 校准回路自动化 (overkill→系统自动下调Z,不等人工)
+
+domains:
+  code-repair:
+    risk_coefficient: 1.5
+    default_head: claude-sonnet-5
+    default_body: deepseek-v4-pro
+    default_judges: 3
+    judge_config: C1
+    special: [heterogeneous_judging, anti_gullibility, black_box_rewrite, batch_judging, template_cache]
+
+  code-review:
+    risk_coefficient: 1.3
+    default_head: deepseek-v4-pro
+    default_body: deepseek-v4-pro
+    default_judges: 3
+    judge_config: C1
+
+  static-analysis:
+    risk_coefficient: 1.2
+    default_head: deepseek-v4-pro
+    default_body: deepseek-v4-pro
+    default_judges: 2
+    judge_config: standard
+
+  data-io:
+    risk_coefficient: 1.0
+    default_head: deepseek-v4-pro
+    default_body: deepseek-v4-pro
+    default_judges: 2
+    judge_config: standard
+
+  data-validation:
+    risk_coefficient: 1.0
+    default_head: deepseek-v4-pro
+    default_body: deepseek-v4-pro
+    default_judges: 2
+    judge_config: standard
+
+  statistics:
+    risk_coefficient: 1.0
+    default_head: deepseek-v4-pro
+    default_body: deepseek-v4-pro
+    default_judges: 2
+    judge_config: standard
+
+  persistence:
+    risk_coefficient: 1.0
+    default_head: deepseek-v4-pro
+    default_body: deepseek-v4-pro
+    default_judges: 2
+    judge_config: standard
+
+  data-modeling:
+    risk_coefficient: 0.9
+    default_head: deepseek-v4-pro
+    default_body: deepseek-v4-pro
+    default_judges: 2
+    judge_config: standard
+
+  formatting:
+    risk_coefficient: 0.7
+    default_head: deepseek-v4-pro
+    default_body: deepseek-v4-pro
+    default_judges: 2
+    judge_config: standard
+    calibration_note: "report-generator 预评分误判Z=9, 经验校准Z=3"
+
+  cli:
+    risk_coefficient: 1.0
+    default_head: deepseek-v4-pro
+    default_body: deepseek-v4-pro
+    default_judges: 2
+    judge_config: standard
+
+  web-api:
+    risk_coefficient: 1.4
+    default_head: claude-sonnet-5
+    default_body: deepseek-v4-pro
+    default_judges: 3
+    judge_config: C1
+
+  research:
+    risk_coefficient: 1.5
+    default_head: claude-sonnet-5
+    default_body: deepseek-v4-pro
+    default_judges: 3
+    judge_config: C1
+    note: "输出不可自动验证，需人工审查"
+
+profiles:
+
+  code-bug-fix:
+    description: "分析已有代码中的缺陷，生成修复补丁"
+    mode: fix
+    z_score: dynamic
+    z_default: 4
+    domain: code-repair
+    context:
+      scale_range: {max_lines: 500, max_dependencies: 10}
+      input_signature: {language: python, bug_types: [logic, boundary, exception, syntax, data-flow]}
+    calibration_history:
+      - {date: "2026-08-06", event: "P8: python-slugify 5/5修复成功", action: "确认Z_default=4"}
+      - {date: "2026-08-06", event: "P13: 修复模板命中率67%", action: "添加template_cache"}
+    source_experiments: [P0, P4, P7, P8, P14]
+
+  code-bug-detect:
+    description: "仅检测缺陷，不修复"
+    mode: detect
+    z_score: 3
+    domain: code-review
+    context:
+      scale_range: {max_lines: 1000, max_dependencies: 20}
+      input_signature: {language: python}
+    calibration_history:
+      - {date: "2026-08-05", event: "P0-P3: 17用例100%检出", action: "确认Z=3"}
+    source_experiments: [P0, P1, P2, P3]
+
+  data-loader:
+    description: "从文件/API加载数据，解析为结构化格式"
+    mode: build
+    z_score: 3
+    domain: data-io
+    context:
+      scale_range: {max_records: 10000, max_fields: 50, formats: [json, csv, yaml]}
+      input_signature: {operation: "read+parse", output_type: "structured_list"}
+    calibration_history:
+      - {date: "2026-08-06", event: "matchlog U1+ pipeline M1: 两次验证", action: "固化Z=3"}
+    source_modules: [matchlog/models.py, pipeline/loader.py]
+    common_pitfalls: ["JSON解析失败处理", "空文件/不存在文件", "编码问题"]
+
+  data-cleaner:
+    description: "验证和过滤数据，剔除无效记录"
+    mode: build
+    z_score: 4
+    domain: data-validation
+    context:
+      scale_range: {max_records: 50000, max_rules: 10}
+      input_signature: {operation: "validate+filter", rule_types: [null_check, range_check, type_check]}
+    calibration_history:
+      - {date: "2026-08-06", event: "pipeline M2: 3规则清洗10条, 正确剔除3条", action: "固化Z=4"}
+    source_modules: [pipeline/cleaner.py]
+    common_pitfalls: ["null与0的区分", "边界值处理", "多条件同时触发"]
+
+  stats-computer:
+    description: "对清洗后数据计算统计指标"
+    mode: build
+    z_score: 4
+    domain: statistics
+    context:
+      scale_range: {max_metrics: 20}
+      input_signature: {operation: "aggregate+compute", metric_types: [mean, median, max, min, rate, distribution]}
+    calibration_history:
+      - {date: "2026-08-06", event: "matchlog U4+pipeline M3: 两次验证", action: "固化Z=4"}
+    source_modules: [matchlog/commands/stats.py, pipeline/stats.py]
+    common_pitfalls: ["除零(空数据集)", "并列第一处理", "浮点精度"]
+
+  report-generator:
+    description: "将分析结果格式化为可读报告"
+    mode: build
+    z_score: 3
+    domain: formatting
+    context:
+      scale_range: {max_sections: 10}
+      input_signature: {operation: "template_fill", output_formats: [markdown, html, json]}
+    calibration_history:
+      - {date: "2026-08-06", event: "预评分蛇误判Z=9(描述词堆叠)", action: "人工校准Z=3"}
+      - {date: "2026-08-06", event: "pipeline M4: 两次构建一次通过", action: "确认Z=3"}
+    source_modules: [pipeline/reporter.py]
+    common_pitfalls: ["字段缺失默认值", "特殊字符转义", "零记录展示"]
+
+  crud-model:
+    description: "定义数据模型（dataclass/ORM）"
+    mode: build
+    z_score: 3
+    domain: data-modeling
+    context:
+      scale_range: {max_entities: 5, max_fields_per: 20}
+      input_signature: {operation: "define_schema"}
+    calibration_history:
+      - {date: "2026-08-06", event: "matchlog U1: 3个dataclass", action: "固化Z=3"}
+    source_modules: [matchlog/models.py]
+
+  crud-store:
+    description: "数据持久化层（CRUD操作）"
+    mode: build
+    z_score: 4
+    domain: persistence
+    context:
+      scale_range: {storage_types: [json, sqlite, file]}
+      input_signature: {operation: "crud", atomicity: required}
+    calibration_history:
+      - {date: "2026-08-06", event: "matchlog U2: JSON原子写入", action: "固化Z=4"}
+    source_modules: [matchlog/store.py]
+    common_pitfalls: ["并发写入冲突", "文件不存在初始化", "格式损坏容错"]
+
+  cli-entry:
+    description: "命令行接口（argparse/subcommands）"
+    mode: build
+    z_score: 3
+    domain: cli
+    context:
+      scale_range: {max_subcommands: 10, max_options_per: 15}
+      input_signature: {operation: "argparse_wiring", pattern: "subcommand_dispatch"}
+    calibration_history:
+      - {date: "2026-08-06", event: "matchlog U5: 3个子命令", action: "固化Z=3"}
+    source_modules: [matchlog/cli.py]
+    common_pitfalls: ["环境变量覆盖默认值", "子命令未注册提示"]
+
+  code-analyzer:
+    description: "静态代码分析（AST遍历+模式匹配）"
+    mode: build
+    z_score: 5
+    domain: static-analysis
+    context:
+      scale_range: {max_files: 50}
+      input_signature: {operation: "ast_walk+pattern_match", languages: [python]}
+    calibration_history:
+      - {date: "2026-08-07", event: "pystatic: 5规则覆盖100%(7/7), 零误报(0 issues on clean)", action: "确认Z=5合适(5条独立规则需并行验证)"}
+      - {date: "2026-08-07", event: "星形依赖拓扑(U1→U2×5→U3): 首次集成通过", action: "固化Z=5, 2蛇头交叉验证适配星形拓扑"}
+    source_modules: [pystatic/rules.py]
+    note: "剖面匹配器曾将规则引擎误映射到code-bug-detect。现固化为独立剖面"
+
+  web-api:
+    description: "REST API端点实现"
+    mode: build
+    z_score: 5
+    domain: web-api
+    status: placeholder
+    note: "无实验数据"
+
+  research-report:
+    description: "股市/行业调研报告生成"
+    mode: research
+    z_score: 7
+    domain: research
+    status: placeholder
+    note: "输出不可自动验证"
+
+value_triggers:
+  safety_keywords: ["密码", "密钥", "token", "认证", "授权", "支付", "转账", "资金", "交易", "隐私", "敏感数据", "个人信息", "权限", "角色", "访问控制"]
+  safety_action: "自动升为高价值 -> 三法官+回归审计"
+  upstream_suspicion:
+    threshold: 1
+    action: "上游任一模块法官驳回>0 → 下游模块自动升为高价值"
+  critical_path:
+    action: "用户显式标记is_critical=true时升为高价值+抽检"
+  decay:
+    condition: "高价值任务连续5次无异常执行"
+    action: "衰减回普通"
+
+routing:
+  # v2.1: Z_eff 查表矩阵替代线性乘法
+  # Z(行) × R(列) → 蛇配置等级
+  # 避免: low-Z×high-R过度增强 / high-Z×low-R过度削弱
+  matrix:
+    tier_names: ["快速", "标准", "交叉", "回溯", "全量"]
+    #         R: 0.7   0.9   1.0   1.2   1.3   1.4   1.5
+    z_low:   [  0,    0,    0,    1,    1,    1,    1  ]   # Z [0,3)
+    z_mid:   [  0,    1,    1,    2,    2,    2,    2  ]   # Z [3,5)
+    z_high:  [  1,    1,    2,    2,    3,    3,    3  ]   # Z [5,7)
+    z_crit:  [  1,    2,    2,    3,    3,    4,    4  ]   # Z [7,10]
+    # 0=快速 1=标准 2=交叉 3=回溯 4=全量
+
+  z_brackets:
+    - {lo: 0, hi: 3, row: z_low}
+    - {lo: 3, hi: 5, row: z_mid}
+    - {lo: 5, hi: 7, row: z_high}
+    - {lo: 7, hi: 10, row: z_crit}
+
+  r_index: {0.7: 0, 0.9: 1, 1.0: 2, 1.2: 3, 1.3: 4, 1.4: 5, 1.5: 6}
+
+  config_by_tier:
+    0: {heads: 1, judges: 1, label: "快速通道"}
+    1: {heads: 1, judges: 2, label: "标准双审"}
+    2: {heads: 2, judges: 2, label: "交叉验证"}
+    3: {heads: 2, judges: 3, label: "回溯+回归审计"}
+    4: {heads: 3, judges: 3, label: "全量审查+人工抽检"}
+
+  mechanism_dedup:
+    black_box_rewrite:
+      removes: [regression_audit, backtrack]
+      note: "黑箱重写必然重跑回归测试，回溯和回归审计是副产品"
+    heterogeneous_judging: {removes: []}
+    anti_gullibility: {removes: []}
+    batch_judging: {removes: []}
+    template_cache: {removes: []}
+
+  merge_rules:
+    judges: max
+    heads: max
+    special: union_then_dedup
+    v_override:
+      condition: "V=高价值"
+      action: "judges = max(judges, 3)"
+      note: "高价值任务至少3法官。已有3法官时不额外增加。例如data-io域(2法官)遇到高价值→提升到3"
+
+  context_mismatch:
+    trigger: "scale_range不兼容 或 input_signature不兼容"
+    action: "置信度降为low + Z_temp = Z剖面 + offset(规模差异+1, 领域差异+1)"
+    note: "基于相似剖面的临时评估，需验证后校准"
+
+calibration_loop:
+  steps:
+    1_new_profile: {trigger: "无匹配剖面", action: "预评分蛇→Z_raw→×0.8保守系数→Z_safe"}
+    2_execute: {action: "以Z_safe执行"}
+    3_feedback:
+      signals:
+        good: "蛇头1轮+法官0驳回+修复蛇未触发"
+        overkill: "蛇头1轮+法官0驳回+实际难度明显低于Z"
+        underkill: "法官驳回>=1 或 修复蛇触发"
+    4_auto_adjust:
+      overkill: "系统自动下调Z_temp → 标记[待审核]"
+      underkill: "系统自动上调Z_temp → 标记[待审核]"
+      good: "标记候选剖面 → 等待人工审核固化"
+      note: "overkill场景不等待人工——标准蛇够用时继续用重型蛇是浪费资源"
+    5_cement: {action: "人工审核通过→写入profiles.yaml(含上下文+校准历史)", rule: "固化后终身使用"}
+
+matching:
+  primary: llm_assisted
+  fallback: prescore_snake
+  future: embedding_retrieval
+  future_note: "剖面库>30后切换嵌入检索(余弦相似度>0.85直接命中, 0.6-0.85→LLM确认)"
+
+sources:
+  mode_a: {experiments: 15, total_api: 506, profiles: [code-bug-fix, code-bug-detect]}
+  mode_b: {experiments: 3, total_api: 105, profiles: [data-loader, data-cleaner, stats-computer, report-generator, crud-model, crud-store, cli-entry, code-analyzer]}
+  placeholder: {profiles: [web-api, research-report]}

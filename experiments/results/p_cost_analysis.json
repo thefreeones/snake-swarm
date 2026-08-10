@@ -1,0 +1,51 @@
+{
+  "analysis": "蛇群全链路成本分析 v1.0",
+  "data_sources": {
+    "P4_repair_measured": "23,258t / 4 bugs",
+    "P8_full_pipeline_measured": "~42,000t / 5 bugs",
+    "P8_auditor_savings_measured": "12,000t (LLM→deterministic)"
+  },
+  "per_bug_breakdown": {
+    "snake_head": 1500,
+    "snake_body": 1500,
+    "judges": 2811,
+    "fix_planner": 863,
+    "fix_snake": 1726,
+    "deterministic_auditor": 0,
+    "total": 8400
+  },
+  "optimization_roadmap": {
+    "level_1_immediate": {
+      "token_per_bug": 6825,
+      "savings_pct": 18,
+      "actions": [
+        "蛇改进回路注入蛇头prompt → -30%蛇头cost",
+        "法官审查范围约束 → 只看修复函数+5行"
+      ],
+      "api_cost": 0
+    },
+    "level_2_small_experiment": {
+      "token_per_bug": 6443,
+      "savings_pct": 23,
+      "actions": [
+        "蛇头分析缓存 → 增量分析",
+        "修复模板缓存 → 匹配即用"
+      ],
+      "api_cost": "~20"
+    },
+    "level_3_architecture": {
+      "token_per_bug": 5599,
+      "savings_pct": 33,
+      "actions": [
+        "批量法官审查 → 共享系统prompt",
+        "轻量蛇头模式 → L1/L2级bug用轻量级"
+      ],
+      "api_cost": "~100"
+    }
+  },
+  "projections": {
+    "50_bugs_baseline": "420K tokens",
+    "50_bugs_level_3": "279K tokens",
+    "cost_at_level_3": "~560¥ (按0.002¥/1K tokens)"
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "experiment_id": "P7",
+  "title": "黑箱重写: 验证信息隔离能否打破认知盲区——Gemini重写safe_divide,不看原代码,消除bool-is-int陷阱",
+  "version": "蛇群v0.4a-2",
+  "timestamp": "2026-08-05",
+  "experiment_design": {
+    "blackbox_snake": "gemini-3.6-flash (temperature=0.3)",
+    "heterogeneous_from": "deepseek-v4-pro (P4 修复蛇)",
+    "methodology": "黑箱重写——不给原代码，仅给函数签名+任务描述+失败回归用例",
+    "info_boundary": [
+      "1. 函数签名: def safe_divide(a, b) -> int | None",
+      "2. 任务描述: 安全除法——输入非法(字符串)/除零/结果非整数→None;否则返回整数",
+      "3. 失败回归: safe_divide(True,1)→期望None实际1; safe_divide(float('inf'),1)→OverflowError"
+    ],
+    "cognitive_blind_spot_target": "bool-is-int陷阱 (isinstance(x,(int,float))在x=True时返回True)"
+  },
+  "verdict": "PASS",
+  "verdict_note": "黑箱重写成功。Gemini在未看到P4原代码的情况下，独立设计了更鲁棒的守卫策略，完全消除了bool-is-int陷阱和inf/nan穿透风险。",
+  "L1_fix_integrity": {
+    "bug_eliminated": true,
+    "trigger_passed": true,
+    "trigger_input": [
+      "abc",
+      1
+    ],
+    "trigger_output": "None (正确)",
+    "note": "原始bug(字符串等非数值输入导致TypeError)已消除"
+  },
+  "L1_side_effects": {
+    "total": 2,
+    "all_P1_only": true,
+    "all_functional_false_positives": true,
+    "details": [
+      {
+        "pattern": "bool_is_int_trap",
+        "severity": "P1",
+        "line": 5,
+        "description": "isinstance(x,(int,float))在x=True时返回True→bool漏检",
+        "verdict": "功能假阳性——代码在第3行先用isinstance(a,bool)拦截了bool，第5行的isinstance(a,(int,float))永远不会对bool执行。静态AST扫描无法理解控制流顺序。",
+        "actual_behavior": "safe_divide(True,1)正确返回None（被第3行bool检查拦截）"
+      },
+      {
+        "pattern": "inf_nan_passthrough",
+        "severity": "P1",
+        "line": 28,
+        "description": "float('inf')/float('nan')通过类型检查但int()转换报错",
+        "verdict": "功能假阳性——第26行math.isinf(res)/math.isnan(res)在int(res)之前拦截了inf/nan。静态AST扫描只要看到int()调用就报，不分析守卫条件。",
+        "actual_behavior": "safe_divide(float('inf'),1)正确返回None（被math.isinf检查拦截）"
+      }
+    ],
+    "note": "两个P1副作用均为功能假阳性。从实际执行看，副作用清零(0个真正危险模式)。"
+  },
+  "L2_regression_tests": {
+    "total_passed": 14,
+    "total_failed": 0,
+    "pass_rate": "14/14 (100%)",
+    "note": "确定性审计者L2 runner对float('inf')/nan的repr序列化存在bug(repr生成非合法Python标识符inf/nan)，5个inf/nan边缘用例改为手动直接执行验证，全部通过。"
+  },
+  "blackbox_code": "import math\n\n\ndef safe_divide(a, b) -> int | None:\n    if isinstance(a, bool) or isinstance(b, bool):\n        return None\n    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):\n        return None\n    if math.isinf(a) or math.isnan(a) or math.isinf(b) or math.isnan(b):\n        return None\n    if b == 0:\n        return None\n\n    if isinstance(a, int) and isinstance(b, int):\n        if a % b == 0:\n            return a // b\n        return None\n\n    try:\n        res = a / b\n    except (OverflowError, ZeroDivisionError):\n        return None\n\n    if math.isinf(res) or math.isnan(res):\n        return None\n\n    if res.is_integer():\n        return int(res)\n\n    return None",
+  "p4_vs_p7_comparison": {
+    "summary": "黑箱重写(Gemini) vs P4修复蛇(DeepSeek) —— 信息隔离有效，异构模型打破认知盲区",
+    "p4": {
+      "repair_snake": "deepseek-v4-pro",
+      "code": "def safe_divide(a, b):\n    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):\n        return None\n    if b == 0:\n        return None\n    result = a / b\n    if result != int(result):\n        return None\n    return int(result)",
+      "strategy": "isinstance(a, (int, float)) 单层类型守卫",
+      "bool_is_int_trap": true,
+      "inf_nan_issue": true,
+      "bool_regression_pass": false,
+      "inf_regression_pass": false,
+      "functional_side_effects": 2,
+      "defense_layers": 1
+    },
+    "p7": {
+      "repair_snake": "gemini-3.6-flash (temperature=0.3)",
+      "code": "import math\n\n\ndef safe_divide(a, b) -> int | None:\n    if isinstance(a, bool) or isinstance(b, bool):\n        return None\n    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):\n        return None\n    if math.isinf(a) or math.isnan(a) or math.isinf(b) or math.isnan(b):\n        return None\n    if b == 0:\n        return None\n\n    if isinstance(a, int) and isinstance(b, int):\n        if a % b == 0:\n            return a // b\n        return None\n\n    try:\n        res = a / b\n    except (OverflowError, ZeroDivisionError):\n        return None\n\n    if math.isinf(res) or math.isnan(res):\n        return None\n\n    if res.is_integer():\n        return int(res)\n\n    return None",
+      "strategy": "多层守卫: isinstance(a, bool)前置 + isinstance(a, (int, float)) + math.isinf/isnan + try/except",
+      "bool_is_int_trap": false,
+      "inf_nan_issue": false,
+      "bool_regression_pass": true,
+      "inf_regression_pass": true,
+      "functional_side_effects": 0,
+      "defense_layers": 4
+    },
+    "key_insight": "Gemini在没有看到P4原代码(仅看到函数签名+任务+两个失败用例)的情况下，独立设计了4层防护策略。P4修复蛇(DeepSeek)的isinstance(a,(int,float))单层守卫引入了bool-is-int陷阱——这正是“认知盲区”的体现：修复者只看到“需要类型检查”但忽略了Python类型层级。黑箱重写蛇(Gemini)从失败用例(True→应返回None)反推出需要显式bool检查，证明了信息隔离+异构模型组合可以打破单一模型的认知盲区。"
+  },
+  "experiment_conclusion": {
+    "hypothesis": "信息隔离(不给原代码)能否打破认知盲区",
+    "result": "CONFIRMED",
+    "detail": "黑箱重写蛇(Gemini)成功消除了P4修复蛇(DeepSeek)引入的bool-is-int陷阱，并额外消除了inf/nan穿透风险",
+    "mechanism": "异构模型(Gemini vs DeepSeek) + 失败用例驱动(从True→1反推bool检查) + 多层防御(显式bool检查→类型检查→math守卫→try/except)"
+  },
+  "auditor_tool_bug": {
+    "component": "DeterministicAuditor._build_regression_runner",
+    "issue": "repr([float('inf'), 1]) 生成 '[inf, 1]'，其中inf不是合法Python标识符",
+    "impact": "包含float('inf')/float('nan')的测试用例在subprocess runner中失败（NameError: name 'inf' is not defined）",
+    "workaround": "inf/nan边缘用例改为直接exec手动验证",
+    "fix_suggestion": "在_build_regression_runner中使用自定义序列化：对float类型特殊值(math.inf/-inf/nan)使用'float(\"inf\")'等字符串表示"
+  }
+}
