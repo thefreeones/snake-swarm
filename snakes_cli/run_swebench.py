@@ -28,10 +28,16 @@ ENV_ROOT = Path(r"D:/competation/design/swebench_env")
 DATA_DIR = Path(r"D:/competation/design/swebench_data")
 CONFIG = json.load(open(os.path.expanduser("~/.snakes_config.json"), encoding="utf-8"))
 
-# 依赖预装 (轻量仓库的手动依赖清单)
+# 依赖预装 (轻量仓库的手动依赖清单 + Python 版本)
 REPO_DEPS = {
-    "marshmallow-code/marshmallow": ["pytest", "pytz", "simplejson"],
-    "pylint-dev/astroid": ["pytest", "lazy-object-proxy", "wrapt", "typing-extensions", "setuptools"],
+    "marshmallow-code/marshmallow": {
+        "python": "3.11",
+        "packages": ["pytest", "pytz", "simplejson"],
+    },
+    "pylint-dev/astroid": {
+        "python": "3.10",
+        "packages": ["pytest", "lazy-object-proxy", "wrapt", "typing-extensions", "setuptools"],
+    },
 }
 
 
@@ -69,11 +75,13 @@ def clone_checkout(repo: str, base_commit: str, env_setup: str = "") -> Path:
 
 def setup_venv(repo_dir: Path, repo: str) -> Path:
     """建 venv + 装依赖. 返回 venv python 路径."""
-    venv = repo_dir / ".venv"
+    spec = REPO_DEPS.get(repo, {"python": "3.11", "packages": ["pytest"]})
+    pyver = spec["python"]
+    venv = repo_dir / f".venv{pyver.replace('.', '')}"
     if not (venv / "Scripts" / "python.exe").exists():
-        subprocess.run(["uv", "venv", "--python", "3.11", str(venv)],
+        subprocess.run(["uv", "venv", "--python", pyver, str(venv)],
                        check=True, timeout=120)
-    deps = REPO_DEPS.get(repo, ["pytest"])
+    deps = spec["packages"]
     env = {**os.environ, "VIRTUAL_ENV": str(venv)}
     subprocess.run(["uv", "pip", "install", "-q", *deps], env=env,
                    check=False, timeout=300)
@@ -145,26 +153,43 @@ def apply_patch(repo_dir: Path, patch: str, strip: int = 1) -> bool:
 
 
 def run_tests(python: Path, repo_dir: Path, test_ids: list, timeout: int = 300) -> dict:
-    """运行测试. 返回 {test_id: 'PASS'|'FAIL'|'ERROR'}."""
+    """运行测试. 返回 {test_id: 'PASS'|'FAIL'|'ERROR'}.
+
+    SWE-bench 参数化测试 ID 含换行等特殊字符, 无法精确解析时
+    回退到"文件::类::函数"前缀匹配 (跑该函数全部参数化用例).
+    """
     results = {}
-    # pytest 一次跑所有 test_ids
-    cmd = [str(python), "-m", "pytest", "-q", "--no-header", "--tb=no", *test_ids]
-    r = subprocess.run(cmd, cwd=str(repo_dir), capture_output=True, text=True, timeout=timeout)
-    # 解析 pytest 输出
-    # 简单方案: 逐 test_id 单独跑 (慢但可靠, 先做正确性)
     for tid in test_ids:
+        # 尝试精确执行; 失败则截断到 文件::类::函数 前缀
         cr = subprocess.run(
             [str(python), "-m", "pytest", "-q", "--no-header", "--tb=no", tid],
             cwd=str(repo_dir), capture_output=True, text=True, timeout=timeout,
         )
         if cr.returncode == 0:
             results[tid] = "PASS"
+            continue
+        # 精确失败: 若含 [ 参数部分, 截断后重试
+        if "[" in tid:
+            prefix = tid.split("[")[0]
+            pr = subprocess.run(
+                [str(python), "-m", "pytest", "-q", "--no-header", "--tb=no", prefix],
+                cwd=str(repo_dir), capture_output=True, text=True, timeout=timeout,
+            )
+            if pr.returncode == 0:
+                results[tid] = "PASS"
+                continue
+            if "collected 0" in pr.stdout or "no tests ran" in pr.stdout:
+                results[tid] = "ERROR"  # 测试文件/节点不存在 (环境不可复现)
+                continue
+            results[tid] = "FAIL"
+            continue
+        # 区分 FAIL vs ERROR
+        if "collected 0" in cr.stdout or "no tests ran" in cr.stdout:
+            results[tid] = "ERROR"
+        elif "ERROR" in cr.stdout or "error" in cr.stderr.lower():
+            results[tid] = "ERROR"
         else:
-            # 区分 FAIL vs ERROR
-            if "ERROR" in cr.stdout or "error" in cr.stderr.lower():
-                results[tid] = "ERROR"
-            else:
-                results[tid] = "FAIL"
+            results[tid] = "FAIL"
     return results
 
 
