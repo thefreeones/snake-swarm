@@ -143,6 +143,60 @@ def _parse_list(v):
     return v or []
 
 
+def _traceback_line_to_func(repo_dir: Path, issue: str) -> dict:
+    """把 traceback 里的 文件:行号 映射到 函数/类 (确定性, 零token).
+
+    返回 {file: {line: (function, class_name)}} 供候选排序加权.
+    """
+    import ast as _ast
+    result = {}
+    for m in re.finditer(r'File "([^"]+)", line (\d+)', issue):
+        fpath, lineno = m.group(1), int(m.group(2))
+        fname = os.path.basename(fpath)
+        # 在 repo 里找同名文件
+        for root, dirs, files in os.walk(str(repo_dir)):
+            dirs[:] = [d for d in dirs if d not in (".git", ".venv", "venv", "__pycache__")]
+            for fn in files:
+                if fn == fname:
+                    full = os.path.join(root, fn)
+                    rel = os.path.relpath(full, str(repo_dir)).replace("\\", "/")
+                    try:
+                        code = open(full, encoding="utf-8", errors="replace").read()
+                        tree = _ast.parse(code)
+                        for node in _ast.walk(tree):
+                            if isinstance(node, _ast.FunctionDef):
+                                if node.lineno <= lineno <= node.end_lineno:
+                                    cls = ""
+                                    for parent in _ast.walk(tree):
+                                        if isinstance(parent, _ast.ClassDef):
+                                            for item in parent.body:
+                                                if item is node:
+                                                    cls = parent.name
+                                    result.setdefault(rel, {})[lineno] = (node.name, cls)
+                    except (SyntaxError, OSError):
+                        pass
+    return result
+
+
+def _weight_candidates(candidates: list, tb_map: dict) -> list:
+    """用 traceback 行号映射给候选加权排序 (命中行号的排最前)."""
+    if not tb_map:
+        return candidates
+    weighted = []
+    for c in candidates:
+        f = c.get("file", "")
+        fn = c.get("function", "")
+        cls = c.get("class_name", "")
+        hit = False
+        for line, (func, klass) in tb_map.get(f, {}).items():
+            if func == fn and (not cls or klass == cls or not klass):
+                hit = True
+                break
+        weighted.append((0 if hit else 1, c))
+    weighted.sort(key=lambda x: x[0])
+    return [c for _, c in weighted]
+
+
 def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
     """评测单个 SWE-bench 实例."""
     iid = inst["instance_id"]
@@ -194,6 +248,11 @@ def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
                          str(repo_dir), problem)
             record["locator"] = loc
         candidates = (loc.get("candidates") if not dry_run else []) or []
+        # traceback 行号加权排序
+        tb_map = _traceback_line_to_func(repo_dir, problem)
+        if tb_map and candidates:
+            candidates = _weight_candidates(candidates, tb_map)
+            record["locator_weights"] = {k: str(v) for k, v in tb_map.items()}
         if not candidates:
             record["errors"].append("定位层无候选")
             out_fd.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -223,7 +282,7 @@ def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
                 attempt["fix_success"] = r.success
                 attempt["tokens"] = r.tokens
                 if not r.patch:
-                    attempt["error"] = "无patch输出"
+                    attempt["error"] = (getattr(r, "error", "") or "无patch输出")[:300]
                     record["attempts"].append(attempt)
                     continue
 

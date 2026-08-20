@@ -542,10 +542,30 @@ Bug描述: {bug_desc}
 
     # ── 修复蛇 ─────────────────────────────
     def _run_fix(self, target_code: str, function: str, bug_desc: str,
-                 head_analysis: str) -> dict:
+                 head_analysis: str, class_name: str = "") -> dict:
         """跑修复蛇生成修复代码"""
-        system = "你是Python代码修复专家。只输出修复后的完整函数代码，不要解释。"
-        user = f"""蛇头分析报告:
+        if class_name:
+            system = "你是Python代码修复专家。只输出修复后的方法定义代码，不要解释。"
+            user = f"""蛇头分析报告:
+{head_analysis}
+
+原始方法代码:
+```python
+{target_code}
+```
+
+Bug: {bug_desc}
+
+要求:
+- 只输出 {class_name}.{function} 方法的完整定义 (以 def 开头, 含方法体)
+- 不要输出 import 语句
+- 不要输出 class 声明
+- 不要输出其他方法
+- 保持原有缩进风格
+请输出修复后的方法代码, 包裹在```python```中。"""
+        else:
+            system = "你是Python代码修复专家。只输出修复后的完整函数代码，不要解释。"
+            user = f"""蛇头分析报告:
 {head_analysis}
 
 原始函数代码:
@@ -996,7 +1016,7 @@ Diff行数变化: {diff_lines}
 
             # 3. 修复蛇
             fix = self._run_fix(head["target_code"], function, bug_description,
-                               head["content"])
+                               head["content"], class_name=class_name)
             tokens["fix"] = fix["total_tokens"]
 
             # 4. 提取修复代码
@@ -1017,6 +1037,17 @@ Diff行数变化: {diff_lines}
                     error="修复蛇未输出代码块", tokens=tokens,
                 )
 
+            # 方法场景: 清洗 LLM 误带的 import/class 声明
+            if class_name:
+                cleaned_lines = []
+                for line in fixed_code.split("\n"):
+                    stripped = line.strip()
+                    if (stripped.startswith(("import ", "from ")) or
+                            stripped.startswith("class ")):
+                        continue
+                    cleaned_lines.append(line)
+                fixed_code = "\n".join(cleaned_lines).strip("\n")
+
             # 5. 快速验证
             if trigger_test and not self._verify_fix(head["target_code"], fixed_code,
                                                      function, trigger_test):
@@ -1026,11 +1057,46 @@ Diff行数变化: {diff_lines}
             audit = self._audit(head["target_code"], fixed_code, function)
             tokens["audit"] = audit["token_cost"]
 
-            # 7. 生成patch
+            # 7. 生成patch (基于目标代码实际位置的精确替换)
             with open(file_path, encoding="utf-8") as f:
                 original_full = f.read()
-            patch = self._generate_patch(file_path, original_full,
-                                        original_full.replace(head["target_code"], fixed_code))
+
+            def _replace_at_location(orig: str, target: str, new: str,
+                                     class_hint: str = "") -> str:
+                """在 orig 中找到 target 的实际位置替换为 new.
+                优先用 AST 行号定位(精确); 失败回退 find 首次匹配.
+                """
+                import ast as _ast
+                try:
+                    tree = _ast.parse(orig)
+                    lines = orig.split("\n")
+                    target_first = target.strip().split("\n")[0]
+                    for node in _ast.walk(tree):
+                        if isinstance(node, _ast.FunctionDef) and node.name == function:
+                            # class 限定: 检查父类
+                            if class_hint:
+                                parent_cls = None
+                                for parent in _ast.walk(tree):
+                                    if isinstance(parent, _ast.ClassDef):
+                                        for item in parent.body:
+                                            if item is node:
+                                                parent_cls = parent.name
+                                if parent_cls != class_hint:
+                                    continue
+                            start = node.lineno - 1
+                            end = node.end_lineno
+                            actual = "\n".join(lines[start:end])
+                            if actual.strip() == target.strip() or target_first in actual:
+                                lines[start:end] = new.rstrip("\n").split("\n")
+                                return "\n".join(lines)
+                except SyntaxError:
+                    pass
+                # 回退: 首次匹配替换
+                return orig.replace(target, new, 1)
+
+            fixed_full = _replace_at_location(original_full, head["target_code"],
+                                              fixed_code, class_name)
+            patch = self._generate_patch(file_path, original_full, fixed_full)
 
             # 8. 判断是否需要黑箱重写 (B阶段)
             rewrite_attempted = False
@@ -1045,11 +1111,20 @@ Diff行数变化: {diff_lines}
                 rw_match = re.search(r'```python\n(.*?)```', rewrite["content"], re.DOTALL)
                 if rw_match:
                     rewritten_code = rw_match.group(1)
+                    if class_name:
+                        cleaned = []
+                        for line in rewritten_code.split("\n"):
+                            s = line.strip()
+                            if (s.startswith(("import ", "from ")) or s.startswith("class ")):
+                                continue
+                            cleaned.append(line)
+                        rewritten_code = "\n".join(cleaned).strip("\n")
                     # 对重写代码做L1审计
                     audit = self._audit(original_full, rewritten_code, function)
                     fixed_code = rewritten_code
-                    patch = self._generate_patch(file_path, original_full,
-                                                original_full.replace(head["target_code"], rewritten_code))
+                    rw_full = _replace_at_location(original_full, head["target_code"],
+                                                   rewritten_code, class_name)
+                    patch = self._generate_patch(file_path, original_full, rw_full)
                     rewrite_attempted = True
 
             # 9. 蛇尾自述
