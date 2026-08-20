@@ -47,6 +47,11 @@ def clone_checkout(repo: str, base_commit: str, env_setup: str = "") -> Path:
     # fetch + checkout base_commit
     subprocess.run(["git", "-C", str(repo_dir), "fetch", "--quiet", "origin", base_commit],
                    check=True, timeout=120)
+    # 清掉实例间残留改动 (test_patch/蛇群patch), 避免 checkout 被阻断
+    subprocess.run(["git", "-C", str(repo_dir), "reset", "--hard", "HEAD"],
+                   check=False, timeout=60)
+    subprocess.run(["git", "-C", str(repo_dir), "clean", "-fd"],
+                   check=False, timeout=60)
     subprocess.run(["git", "-C", str(repo_dir), "checkout", "--quiet", base_commit],
                    check=True, timeout=60)
     # 重置到干净状态 (清掉之前 apply 的 patch)
@@ -103,6 +108,16 @@ def apply_patch(repo_dir: Path, patch: str, strip: int = 1) -> bool:
     r3 = subprocess.run(["git", "-C", str(repo_dir), "apply", "--check", str(patch_file)],
                         capture_output=True, text=True)
     if r3.returncode == 0:
+        subprocess.run(["git", "-C", str(repo_dir), "apply", str(patch_file)],
+                       check=True)
+        return True
+    # 再试: <repo_name>/ 前缀 (e.g. astroid/brain/xxx.py, repo 根就是包名)
+    fixed3 = re.sub(r'^--- a/(?!src/)', f'--- a/{repo_name}/', patch, flags=re.M)
+    fixed3 = re.sub(r'^\+\+\+ b/(?!src/)', f'+++ b/{repo_name}/', fixed3, flags=re.M)
+    patch_file.write_text(fixed3, encoding="utf-8")
+    r4 = subprocess.run(["git", "-C", str(repo_dir), "apply", "--check", str(patch_file)],
+                        capture_output=True, text=True)
+    if r4.returncode == 0:
         subprocess.run(["git", "-C", str(repo_dir), "apply", str(patch_file)],
                        check=True)
         return True
@@ -248,10 +263,31 @@ def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
                          str(repo_dir), problem)
             record["locator"] = loc
         candidates = (loc.get("candidates") if not dry_run else []) or []
-        # traceback 行号加权排序
+        # traceback 行号加权排序 + 确定性兜底: 行号命中的函数无条件加入候选头部
         tb_map = _traceback_line_to_func(repo_dir, problem)
-        if tb_map and candidates:
-            candidates = _weight_candidates(candidates, tb_map)
+        if tb_map:
+            tb_candidates = []
+            seen = set()
+            for f, lines in tb_map.items():
+                for line, (func, klass) in lines.items():
+                    # 优先最深的调用帧 (最后出现的行号往往是根因点)
+                    key = (f, func, klass)
+                    if key not in seen and func:
+                        seen.add(key)
+                        tb_candidates.append({
+                            "file": f, "function": func, "class_name": klass,
+                            "reason": f"traceback行号{line}确定性定位",
+                            "from_traceback": True,
+                        })
+            # 倒序: traceback 最后一个 File 帧 = 最深调用 = 根因概率最高
+            tb_candidates = tb_candidates[::-1]
+            # 合并: traceback 候选在前, LLM 候选在后(去重)
+            merged = list(tb_candidates)
+            for c in candidates:
+                key = (c.get("file", ""), c.get("function", ""), c.get("class_name", ""))
+                if key not in {(x["file"], x["function"], x["class_name"]) for x in merged}:
+                    merged.append(c)
+            candidates = merged[:5]
             record["locator_weights"] = {k: str(v) for k, v in tb_map.items()}
         if not candidates:
             record["errors"].append("定位层无候选")
