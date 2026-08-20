@@ -79,7 +79,6 @@ def setup_venv(repo_dir: Path, repo: str) -> Path:
 
 def apply_patch(repo_dir: Path, patch: str, strip: int = 1) -> bool:
     """应用 patch (git apply), 自动修正路径前缀."""
-    # 修正路径: 若 a/ 后面没有仓库相对路径前缀, 尝试加 src/<repo>/
     patch_file = repo_dir / "_tmp_apply.patch"
     patch_file.write_text(patch, encoding="utf-8")
     # 先试原样 apply
@@ -89,10 +88,33 @@ def apply_patch(repo_dir: Path, patch: str, strip: int = 1) -> bool:
         subprocess.run(["git", "-C", str(repo_dir), "apply", str(patch_file)],
                        check=True)
         return True
-    # 失败: 尝试把 a/xxx.py → a/src/<repo>/xxx.py (相对路径丢失场景)
-    fixed = patch
-    fixed = re.sub(r'^--- a/(?!src/)', '--- a/src/', fixed, flags=re.M)
-    fixed = re.sub(r'^\+\+\+ b/(?!src/)', '+++ b/src/', fixed, flags=re.M)
+    # 失败: 用 basename 反查仓库内真实路径 (e.g. brain_builtin_inference.py → astroid/brain/brain_builtin_inference.py)
+    def _resolve_by_basename(p: str) -> str:
+        for root, dirs, files in os.walk(str(repo_dir)):
+            dirs[:] = [d for d in dirs if d not in (".git", ".venv", "venv", "__pycache__")]
+            for fn in files:
+                if fn == os.path.basename(p):
+                    full = os.path.join(root, fn)
+                    rel = os.path.relpath(full, str(repo_dir)).replace("\\", "/")
+                    return rel
+        return p
+
+    # 提取 patch 里的文件路径并替换
+    def _rewrite_paths(p: str) -> str:
+        new_lines = []
+        for line in p.split("\n"):
+            m = re.match(r'^(--- a/|\+\+\+ b/)(\S+)', line)
+            if m:
+                old = m.group(2)
+                # 若 old 不是仓库内真实相对路径, 用 basename 反查
+                if not (repo_dir / old).exists():
+                    resolved = _resolve_by_basename(old)
+                    if resolved != old:
+                        line = f"{m.group(1)}{resolved}"
+            new_lines.append(line)
+        return "\n".join(new_lines)
+
+    fixed = _rewrite_paths(patch)
     patch_file.write_text(fixed, encoding="utf-8")
     r2 = subprocess.run(["git", "-C", str(repo_dir), "apply", "--check", str(patch_file)],
                         capture_output=True, text=True)
@@ -100,27 +122,18 @@ def apply_patch(repo_dir: Path, patch: str, strip: int = 1) -> bool:
         subprocess.run(["git", "-C", str(repo_dir), "apply", str(patch_file)],
                        check=True)
         return True
-    # 再试: src/<repo>/ 前缀 (e.g. src/marshmallow/fields.py)
+    # 兜底: 递归向上尝试 src/ 和 <repo_name>/ 前缀
     repo_name = repo_dir.name
-    fixed2 = re.sub(r'^--- a/(?!src/)', f'--- a/src/{repo_name}/', patch, flags=re.M)
-    fixed2 = re.sub(r'^\+\+\+ b/(?!src/)', f'+++ b/src/{repo_name}/', fixed2, flags=re.M)
-    patch_file.write_text(fixed2, encoding="utf-8")
-    r3 = subprocess.run(["git", "-C", str(repo_dir), "apply", "--check", str(patch_file)],
-                        capture_output=True, text=True)
-    if r3.returncode == 0:
-        subprocess.run(["git", "-C", str(repo_dir), "apply", str(patch_file)],
-                       check=True)
-        return True
-    # 再试: <repo_name>/ 前缀 (e.g. astroid/brain/xxx.py, repo 根就是包名)
-    fixed3 = re.sub(r'^--- a/(?!src/)', f'--- a/{repo_name}/', patch, flags=re.M)
-    fixed3 = re.sub(r'^\+\+\+ b/(?!src/)', f'+++ b/{repo_name}/', fixed3, flags=re.M)
-    patch_file.write_text(fixed3, encoding="utf-8")
-    r4 = subprocess.run(["git", "-C", str(repo_dir), "apply", "--check", str(patch_file)],
-                        capture_output=True, text=True)
-    if r4.returncode == 0:
-        subprocess.run(["git", "-C", str(repo_dir), "apply", str(patch_file)],
-                       check=True)
-        return True
+    for prefix in (f"src/{repo_name}/", f"{repo_name}/", "src/"):
+        fixed2 = re.sub(r'^--- a/(?!src/)', f'--- a/{prefix}', patch, flags=re.M)
+        fixed2 = re.sub(r'^\+\+\+ b/(?!src/)', f'+++ b/{prefix}', fixed2, flags=re.M)
+        patch_file.write_text(fixed2, encoding="utf-8")
+        r3 = subprocess.run(["git", "-C", str(repo_dir), "apply", "--check", str(patch_file)],
+                            capture_output=True, text=True)
+        if r3.returncode == 0:
+            subprocess.run(["git", "-C", str(repo_dir), "apply", str(patch_file)],
+                           check=True)
+            return True
     return False
 
 
