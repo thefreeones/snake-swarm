@@ -1004,6 +1004,18 @@ Diff行数变化: {diff_lines}
             match = re.search(r'```python\n(.*?)```', fix["content"], re.DOTALL)
             if match:
                 fixed_code = match.group(1)
+            elif not fix.get("content", "").strip():
+                # 修复蛇返回空 content (reasoning trap): 静默假成功, 必须报失败
+                return FixResult(
+                    bug_id=bug_id, success=False,
+                    error="修复蛇返回空内容(模型reasoning消耗全部token)", tokens=tokens,
+                )
+            elif fixed_code.strip() == head["target_code"].strip():
+                # LLM 有输出但未提取到代码块 → 视为修复失败
+                return FixResult(
+                    bug_id=bug_id, success=False,
+                    error="修复蛇未输出代码块", tokens=tokens,
+                )
 
             # 5. 快速验证
             if trigger_test and not self._verify_fix(head["target_code"], fixed_code,
