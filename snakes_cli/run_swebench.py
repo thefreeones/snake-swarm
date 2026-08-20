@@ -44,14 +44,21 @@ def clone_checkout(repo: str, base_commit: str, env_setup: str = "") -> Path:
             ["git", "clone", "--quiet", f"https://github.com/{repo}.git", str(repo_dir)],
             check=True, timeout=300,
         )
-    # fetch + checkout base_commit
-    subprocess.run(["git", "-C", str(repo_dir), "fetch", "--quiet", "origin", base_commit],
-                   check=True, timeout=120)
-    # 清掉实例间残留改动 (test_patch/蛇群patch), 避免 checkout 被阻断
+    # 先清残留 (test_patch/蛇群patch/临时文件), 再 fetch
     subprocess.run(["git", "-C", str(repo_dir), "reset", "--hard", "HEAD"],
                    check=False, timeout=60)
     subprocess.run(["git", "-C", str(repo_dir), "clean", "-fd"],
                    check=False, timeout=60)
+    # fetch base_commit (带重试, git代理偶尔握手失败)
+    for attempt in range(3):
+        r = subprocess.run(["git", "-C", str(repo_dir), "fetch", "--quiet",
+                            "origin", base_commit],
+                           capture_output=True, text=True, timeout=120)
+        if r.returncode == 0:
+            break
+        if attempt == 2:
+            raise RuntimeError(f"git fetch failed after 3 attempts: {r.stderr[:200]}")
+        time.sleep(5)
     subprocess.run(["git", "-C", str(repo_dir), "checkout", "--quiet", base_commit],
                    check=True, timeout=60)
     # 重置到干净状态 (清掉之前 apply 的 patch)
