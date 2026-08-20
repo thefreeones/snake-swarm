@@ -113,7 +113,7 @@ python snakes_cli/cli.py scan tests/fixtures/slugify.py \
 
 ## 论文
 
-- **中文投稿版**：已投稿至《计算机研究与发展》，审稿中
+- **中文投稿版**：投稿准备中（目标《计算机研究与发展》，尚未提交）
 - **英文预印本**：[Zenodo DOI: 10.5281/zenodo.21780091](https://doi.org/10.5281/zenodo.21780091)
 
 ---
