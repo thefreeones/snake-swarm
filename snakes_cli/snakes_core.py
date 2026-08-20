@@ -454,9 +454,44 @@ class Snakes:
         return cache
 
     # ── P11 分层蛇头 ───────────────────────
+    def _locate_function(self, full_code: str, function: str,
+                         class_name: str = "") -> str:
+        """精确提取目标函数代码（支持类内方法）。
+
+        真实代码库中同名方法常见（基类/子类/重载），且方法带缩进。
+        AST 定位优先，找不到时回退正则。
+        """
+        import ast as _ast
+        try:
+            tree = _ast.parse(full_code)
+            # 优先: class 内方法
+            if class_name:
+                for node in _ast.walk(tree):
+                    if isinstance(node, _ast.ClassDef) and node.name == class_name:
+                        for item in node.body:
+                            if isinstance(item, _ast.FunctionDef) and item.name == function:
+                                lines = full_code.split("\n")
+                                return "\n".join(lines[item.lineno - 1:item.end_lineno])
+            # 次优先: 顶层函数（唯一名）
+            func_nodes = [n for n in _ast.walk(tree)
+                          if isinstance(n, _ast.FunctionDef) and n.name == function]
+            if len(func_nodes) == 1:
+                lines = full_code.split("\n")
+                return "\n".join(lines[func_nodes[0].lineno - 1:func_nodes[0].end_lineno])
+            # 多个同名且无 class 限定: 取第一个（与旧行为一致）
+            if func_nodes:
+                lines = full_code.split("\n")
+                return "\n".join(lines[func_nodes[0].lineno - 1:func_nodes[0].end_lineno])
+        except SyntaxError:
+            pass
+        # 回退: 正则（支持缩进方法）
+        pattern = r'^(?:    )?def ' + re.escape(function) + r'\(.*?(?=^(?:    )?def |^class |\Z)'
+        m = re.search(pattern, full_code, re.MULTILINE | re.DOTALL)
+        return m.group(0) if m else full_code
+
     def _run_head(self, file_path: str, function: str, bug_desc: str,
                   error_type: str = "", use_cache: bool = False,
-                  injected_knowledge: str = "") -> dict:
+                  injected_knowledge: str = "", class_name: str = "") -> dict:
         """跑蛇头分析"""
         complexity = self._classify_complexity(bug_desc, error_type)
         model = self.models["light_head"] if complexity == "light" else self.models["heavy_head"]
@@ -464,19 +499,14 @@ class Snakes:
         cache = self._get_cached_context(file_path)
         full_code = cache["code"]
 
+        target_code = self._locate_function(full_code, function, class_name)
         if use_cache and len(cache["functions"]) > 1:
-            # 温缓存: 仅展示目标函数+摘要
-            func_match = re.search(rf'(def {function}\(.*?(?=^def |\Z))', full_code,
-                                   re.MULTILINE | re.DOTALL)
-            target_code = func_match.group(1) if func_match else full_code
             context = (
                 f"文件概要: {len(cache['functions'])}个函数, {cache['line_count']}行\n"
                 f"函数签名: {', '.join(cache['functions'][:10])}...\n\n"
                 f"目标函数代码:\n```python\n{target_code}\n```"
             )
         else:
-            # 冷缓存: 全文件
-            target_code = full_code
             context = f"完整代码:\n```python\n{full_code}\n```"
 
         system = "你是代码分析专家。分析bug根因，输出修复方案。"
@@ -561,8 +591,29 @@ except Exception as e:
 
         # 危险模式扫描
         import ast as _ast
-        try:
-            tree = _ast.parse(fixed)
+
+        def _parse_for_audit(code: str):
+            """解析修复代码用于审计。
+            优先直接解析（完整模块）；方法片段（带缩进）用 class 包裹降级解析。
+            """
+            try:
+                return _ast.parse(code)
+            except SyntaxError:
+                pass
+            # 方法片段: 尝试用类包裹
+            try:
+                return _ast.parse("class _AuditStub:\n" + code)
+            except SyntaxError:
+                # 顶层函数片段: 直接包裹
+                try:
+                    return _ast.parse("def _audit_wrapper():\n" + code)
+                except SyntaxError:
+                    return None
+
+        tree = _parse_for_audit(fixed)
+        if tree is None:
+            issues.append("语法错误:修复代码无法解析")
+        else:
             for node in _ast.walk(tree):
                 if isinstance(node, _ast.ExceptHandler) and node.type is None:
                     issues.append("裸except")
@@ -574,8 +625,6 @@ except Exception as e:
                                 names = [e.id for e in arg.elts if isinstance(e, _ast.Name)]
                                 if 'int' in names and 'bool' not in names:
                                     issues.append("bool-is-int陷阱:isinstance未排除bool")
-        except SyntaxError:
-            issues.append("语法错误:修复代码无法解析")
 
         # 范围溢出
         orig_lines = original.split("\n")
@@ -605,7 +654,8 @@ except Exception as e:
     # v0.7 黑箱重写 (B阶段修复)
     # ══════════════════════════════════════════════════════════
 
-    def _extract_contract(self, original_code: str, function: str) -> dict:
+    def _extract_contract(self, original_code: str, function: str,
+                          class_name: str = "") -> dict:
         """从原代码提取契约: 函数签名 + import + 禁止事项"""
         import ast as _ast
         contract = {
@@ -623,14 +673,26 @@ except Exception as e:
                     contract["imports"].append(_ast.unparse(node))
                 # 找到目标函数
                 if isinstance(node, _ast.FunctionDef) and node.name == function:
+                    # class 限定: 只在指定类内找
+                    if class_name:
+                        parent_class = None
+                        for parent in _ast.walk(tree):
+                            if isinstance(parent, _ast.ClassDef):
+                                for item in parent.body:
+                                    if item is node:
+                                        parent_class = parent.name
+                                        break
+                        if parent_class != class_name:
+                            continue
                     contract["signature"] = f"def {function}({_ast.unparse(node.args)}):"
                     contract["decorators"] = [_ast.unparse(d) for d in node.decorator_list]
                     # 检查是否为公共API (不以_开头)
                     if not function.startswith('_'):
                         contract["public_api_warning"] = True
+                    break
         except SyntaxError:
             # 退而求其次: 正则提取
-            sig_match = re.search(rf'def {function}\((.*?)\):', original_code)
+            sig_match = re.search(r'def ' + re.escape(function) + r'\((.*?)\):', original_code)
             if sig_match:
                 contract["signature"] = f"def {function}({sig_match.group(1)}):"
         return contract
@@ -889,7 +951,8 @@ Diff行数变化: {diff_lines}
 
     def fix(self, file_path: str, function: str, bug_description: str,
             error_type: str = "", trigger_test: str = None,
-            use_cache: bool = False, enable_judges: bool = False) -> FixResult:
+            use_cache: bool = False, enable_judges: bool = False,
+            class_name: str = "") -> FixResult:
         """
         修复单个bug。
 
@@ -900,6 +963,7 @@ Diff行数变化: {diff_lines}
             error_type: 错误类型(可选)
             trigger_test: 快速验证输入(可选,如 "'abc', 1")
             use_cache: 是否使用文件缓存(P12)
+            class_name: 所属类名(可选)——同名方法精确定位
 
         Returns:
             FixResult
@@ -926,7 +990,8 @@ Diff行数变化: {diff_lines}
             # 3. 蛇头分析 (P11+P12)
             head = self._run_head(file_path, function, bug_description,
                                   error_type, use_cache,
-                                  injected_knowledge=injected)
+                                  injected_knowledge=injected,
+                                  class_name=class_name)
             tokens["head"] = head["total_tokens"]
 
             # 3. 修复蛇
@@ -958,7 +1023,7 @@ Diff行数变化: {diff_lines}
             # 8. 判断是否需要黑箱重写 (B阶段)
             rewrite_attempted = False
             if not audit["passed"]:
-                contract = self._extract_contract(original_full, function)
+                contract = self._extract_contract(original_full, function, class_name)
                 rewrite = self._run_blackbox_rewrite(
                     contract, bug_description, head["content"],
                     test_code=trigger_test or "")
