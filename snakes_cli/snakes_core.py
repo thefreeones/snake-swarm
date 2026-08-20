@@ -359,7 +359,7 @@ class Snakes:
 
     # ── LLM调用 ──────────────────────────────
     def _call(self, model: str, system: str, user: str,
-              temperature: float = 0.3, max_tokens: int = 4096) -> dict:
+              temperature: float = 0.3, max_tokens: int = 16384) -> dict:
         """底层LLM调用"""
         url = f"{self.base_url}/chat/completions"
         payload = {
@@ -1385,7 +1385,7 @@ Diff行数变化: {diff_lines}
 
         result = self._call(
             self.models.get("fix_snake", "deepseek-v4-pro"),
-            system, user, temperature=0.3, max_tokens=4096)
+            system, user, temperature=0.3, max_tokens=16384)
 
         content = result["content"]
         # 提取代码和测试

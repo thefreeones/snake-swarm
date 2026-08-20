@@ -85,10 +85,8 @@ def setup_venv(repo_dir: Path, repo: str) -> Path:
     env = {**os.environ, "VIRTUAL_ENV": str(venv)}
     subprocess.run(["uv", "pip", "install", "-q", *deps], env=env,
                    check=False, timeout=300)
-    # editable install 包本身 (如果存在 setup.py/pyproject)
-    if (repo_dir / "setup.py").exists() or (repo_dir / "pyproject.toml").exists():
-        subprocess.run(["uv", "pip", "install", "-q", "-e", "."], env=env,
-                       cwd=str(repo_dir), check=False, timeout=300)
+    # 不装 editable: 测试用 PYTHONPATH=repo_dir 指向当前 checkout (切commit后代码即生效)
+    # editable 安装会被新版 setuptools 的 build_editable 缺失阻断 (astroid老pyproject)
     return venv / "Scripts" / "python.exe"
 
 
@@ -159,11 +157,13 @@ def run_tests(python: Path, repo_dir: Path, test_ids: list, timeout: int = 300) 
     回退到"文件::类::函数"前缀匹配 (跑该函数全部参数化用例).
     """
     results = {}
+    # PYTHONPATH=repo_dir: import 用当前 checkout 源码 (非 editable 安装)
+    env = {**os.environ, "PYTHONPATH": str(repo_dir)}
     for tid in test_ids:
         # 尝试精确执行; 失败则截断到 文件::类::函数 前缀
         cr = subprocess.run(
             [str(python), "-m", "pytest", "-q", "--no-header", "--tb=no", tid],
-            cwd=str(repo_dir), capture_output=True, text=True, timeout=timeout,
+            cwd=str(repo_dir), capture_output=True, text=True, timeout=timeout, env=env,
         )
         if cr.returncode == 0:
             results[tid] = "PASS"
@@ -173,7 +173,7 @@ def run_tests(python: Path, repo_dir: Path, test_ids: list, timeout: int = 300) 
             prefix = tid.split("[")[0]
             pr = subprocess.run(
                 [str(python), "-m", "pytest", "-q", "--no-header", "--tb=no", prefix],
-                cwd=str(repo_dir), capture_output=True, text=True, timeout=timeout,
+                cwd=str(repo_dir), capture_output=True, text=True, timeout=timeout, env=env,
             )
             if pr.returncode == 0:
                 results[tid] = "PASS"
