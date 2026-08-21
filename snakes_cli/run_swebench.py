@@ -357,46 +357,90 @@ def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
                 from snakes_core import Snakes
                 snakes = Snakes(api_key=CONFIG["api_key"], base_url=CONFIG["base_url"],
                                 models=CONFIG["models"])
-                r = snakes.fix(
-                    file_path=file_path,
-                    function=function,
-                    bug_description=problem,
-                    class_name=class_name,
-                    enable_judges=False,
-                )
-                attempt["fix_success"] = r.success
-                attempt["tokens"] = r.tokens
-                if not r.patch:
-                    attempt["error"] = (getattr(r, "error", "") or "无patch输出")[:300]
-                    record["attempts"].append(attempt)
-                    continue
+                # P0-2 中间验证循环: 候选修复 → 跑 FAIL_TO_PASS → 失败带反馈迭代 (≤2轮)
+                iterations = []
+                feedback = ""
+                final_r = None
+                for it in range(3):  # 第1轮 + 最多2次迭代
+                    r = snakes.fix(
+                        file_path=file_path,
+                        function=function,
+                        bug_description=problem,
+                        class_name=class_name,
+                        enable_judges=False,
+                        injected_knowledge=feedback,
+                    )
+                    iterations.append({"round": it + 1, "tokens": r.tokens,
+                                       "success": r.success,
+                                       "error": (getattr(r, "error", "") or "")[:200]})
+                    if not r.patch:
+                        break
+                    # 回滚到干净状态 → 重新应用 test_patch → 应用蛇群 patch
+                    subprocess.run(["git", "-C", str(repo_dir), "checkout", "--quiet", "--", "."],
+                                   check=False)
+                    apply_patch(repo_dir, inst["test_patch"])
+                    if not apply_patch(repo_dir, r.patch):
+                        iterations[-1]["error"] = "蛇群patch apply失败"
+                        break
+                    # 跑 FAIL_TO_PASS (先只跑 ftp, 全过才跑 ptp 省时间)
+                    after_ftp = run_tests(python, repo_dir, fail_to_pass)
+                    ftp_pass = all(v == "PASS" for v in after_ftp.values())
+                    if ftp_pass:
+                        after_ptp = run_tests(python, repo_dir, pass_to_pass)
+                        ptp_pass = all(v == "PASS" for v in after_ptp.values())
+                        attempt["fail_to_pass"] = after_ftp
+                        attempt["pass_to_pass"] = after_ptp
+                        if ptp_pass:
+                            final_r = r
+                            attempt["fix_success"] = True
+                            attempt["tokens"] = r.tokens
+                            attempt["iterations"] = iterations
+                            record["resolved"] = True
+                            record["attempts"].append(attempt)
+                            break
+                        # ftp 过但 ptp 回归 → 反馈 ptp 失败详情继续迭代
+                        ptp_fails = [f"{k}:{v}" for k, v in after_ptp.items() if v != "PASS"]
+                        feedback = (f"上一轮修复通过了目标测试但引入了回归! "
+                                    f"回归测试({len(ptp_fails)}个): {ptp_fails[:5]}"
+                                    f"\n请保留目标修复的同时避免破坏这些测试。")
+                        continue
+                    # ftp 失败 → 收集失败详情反馈
+                    ftp_fails = [f"{k}:{v}" for k, v in after_ftp.items() if v != "PASS"]
+                    attempt["fail_to_pass"] = after_ftp
+                    feedback = (f"上一轮修复后 FAIL_TO_PASS 测试仍失败 ({len(ftp_fails)}个): "
+                                f"{ftp_fails[:3]}"
+                                f"\n请分析为什么修复没有让这些测试通过, 重新输出修复。")
+                    iterations[-1]["ftp_fail"] = len(ftp_fails)
+                    if it == 2:
+                        break
 
-                # 回滚 test_patch 之前的修复尝试? 不行——每候选都是独立 fix,
-                # 但 repo 状态会被上一个候选污染. 这里用 git checkout 恢复.
-                subprocess.run(["git", "-C", str(repo_dir), "checkout", "--quiet", "--", "."],
-                               check=False)
-                # 重新应用 test_patch (被 checkout 清掉了)
-                apply_patch(repo_dir, inst["test_patch"])
-
-                # 应用蛇群 patch
-                if not apply_patch(repo_dir, r.patch):
-                    attempt["error"] = "蛇群patch apply失败"
-                    attempt["patch"] = r.patch[:300]
-                    record["attempts"].append(attempt)
-                    continue
-
-                # 评测: FAIL_TO_PASS + PASS_TO_PASS 采样
-                after_ftp = run_tests(python, repo_dir, fail_to_pass)
-                after_ptp = run_tests(python, repo_dir, pass_to_pass)
-                ftp_pass = all(v == "PASS" for v in after_ftp.values())
-                ptp_pass = all(v == "PASS" for v in after_ptp.values())
-                attempt["fail_to_pass"] = after_ftp
-                attempt["pass_to_pass"] = after_ptp
-                if ftp_pass and ptp_pass:
-                    record["resolved"] = True
+                if record.get("resolved"):
+                    break
+                # P1-1 回归保护: 2轮迭代后 ftp 仍全败的候选视为劣质,
+                # 跳过剩余候选 (省 token)
+                ftp_all_fail = all(
+                    "ftp_fail" in it and it["ftp_fail"] == len(fail_to_pass)
+                    for it in iterations if "ftp_fail" in it
+                ) and len([it for it in iterations if "ftp_fail" in it]) >= 2
+                if ftp_all_fail:
+                    attempt["error"] = "候选2轮迭代ftp全败, 标记劣质跳过"
                     record["attempts"].append(attempt)
                     break
-                record["attempts"].append(attempt)
+                # 全部迭代失败: 记录最后状态
+                if final_r is None and iterations:
+                    last = iterations[-1]
+                    attempt["fix_success"] = last.get("success", False)
+                    attempt["tokens"] = last.get("tokens", {})
+                    attempt["iterations"] = iterations
+                    if "ftp_fail" in last:
+                        pass  # fail_to_pass 已记录
+                    elif "蛇群patch apply失败" in last.get("error", ""):
+                        attempt["error"] = "蛇群patch apply失败"
+                    elif last.get("error"):
+                        attempt["error"] = last["error"]
+                    else:
+                        attempt["error"] = "迭代后仍失败"
+                    record["attempts"].append(attempt)
             except Exception as e:
                 attempt["error"] = f"异常: {str(e)[:200]}"
                 record["attempts"].append(attempt)

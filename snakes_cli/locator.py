@@ -18,15 +18,25 @@ import argparse
 import ast
 import json
 import os
+import re
 import sys
 
 
-def scan_repo(repo_dir: str, max_files: int = 60) -> dict:
+def scan_repo(repo_dir: str, max_files: int = 120) -> dict:
     """AST 扫描 repo, 构建 文件→类→方法 索引 (零token)."""
     index = {}
     _EXCLUDE_SUBSTR = (
         ".venv", "venv", "site-packages", "node_modules", "__pycache__",
         ".tox", ".pytest_cache", "build", "dist", "docs", ".git",
+    )
+    # brain/ 下纯第三方插件文件 (占索引名额且与核心推断无关)
+    _THIRD_PARTY_BRAIN = (
+        "brain_argparse", "brain_attrs", "brain_boto3", "brain_collections",
+        "brain_crypt", "brain_ctypes", "brain_curses", "brain_dateutil",
+        "brain_gi", "brain_hashlib", "brain_http", "brain_hypothesis",
+        "brain_io", "brain_mechanize", "brain_multiprocessing", "brain_nose",
+        "brain_numpy", "brain_pathlib", "brain_random", "brain_ssl",
+        "brain_threading", "brain_typing", "brain_urllib", "brain_uuid",
     )
     for root, dirs, files in os.walk(repo_dir):
         # 跳过噪声目录 (包含匹配, 覆盖 .venv310 等变体 + site-packages 副本)
@@ -34,6 +44,8 @@ def scan_repo(repo_dir: str, max_files: int = 60) -> dict:
                    if not any(ex in d for ex in _EXCLUDE_SUBSTR)]
         for fname in files:
             if not fname.endswith(".py"):
+                continue
+            if any(tp in fname for tp in _THIRD_PARTY_BRAIN):
                 continue
             path = os.path.join(root, fname)
             rel = os.path.relpath(path, repo_dir).replace("\\", "/")
@@ -93,9 +105,9 @@ def render_method_details(index: dict, file: str, max_classes: int = 4) -> str:
     return "\n".join(out)
 
 
-LOCATOR_PROMPT = """你是代码定位专家。给定一个 GitHub issue 描述和代码结构索引，找出最可能包含 bug 的修复位置。
+LOCATOR_PROMPT = """你是代码定位专家。给定一个 GitHub issue 描述和一个仓库的代码结构索引，找出 bug 最可能的位置。
 
-代码结构索引 (文件: 类/方法):
+仓库代码结构索引 (文件→类→方法):
 ```
 {index}
 ```
@@ -125,6 +137,7 @@ def traceback_hint(issue: str) -> str:
         if 'Error:' in ln or 'error:' in ln.lower():
             out.append(ln.strip())
     return "\n".join(out[:8])
+
 
 LOCATOR_PROMPT_V2 = """你是代码定位专家。给定一个 GitHub issue 描述和一个候选文件的方法体预览，找出 bug 的精确定位。
 
@@ -195,9 +208,131 @@ def _parse_candidates(content: str) -> list:
         return []
 
 
+def _resolve_candidate_paths(candidates: list, index: dict, repo_dir: str) -> list:
+    """P0-1 路径纠偏: LLM 可能凭直觉编造 file 路径 (如 astroid/nodes/scoped_nodes.py,
+    实际是包 scoped_nodes/scoped_nodes.py)。file 不存在时用 函数名/类名 在 AST 索引
+    反查真实路径。零 token 确定性查表。
+    """
+    out = []
+    for c in candidates:
+        file = c.get("file", "")
+        func = c.get("function", "")
+        cls = c.get("class_name", "")
+        # 路径存在 → 直接用
+        full = os.path.join(repo_dir, file) if file else ""
+        if file and os.path.exists(full) and file.endswith(".py"):
+            out.append(c)
+            continue
+        # 路径无效 → 在索引里反查 (函数名/类名 匹配)
+        resolved = None
+        for f, data in index.items():
+            if not f.endswith(".py"):
+                continue
+            for kls in data.get("classes", []):
+                if cls and kls.get("name") == cls:
+                    for m in kls.get("methods", []):
+                        if m.get("name") == func:
+                            resolved = f
+                            break
+                    if resolved:
+                        break
+                # 类名未指定时, 方法属于该类也尝试
+                if not cls:
+                    for m in kls.get("methods", []):
+                        if m.get("name") == func:
+                            resolved = f
+                            break
+                    if resolved:
+                        break
+            if resolved:
+                break
+            # 顶层函数
+            if not cls:
+                for top in data.get("funcs", []):
+                    if top == func:
+                        resolved = f
+                        break
+            if resolved:
+                break
+        if resolved:
+            fixed = dict(c)
+            fixed["file"] = resolved
+            fixed["resolved_from"] = f"path_fix:{file}"
+            out.append(fixed)
+        else:
+            # 兜底: 保留原候选但标记 (修复层会报 file/function 无效)
+            out.append(c)
+    return out
+
+
+def _symbol_matches(issue: str, index: dict, max_hits: int = 4) -> list:
+    """P0-3 符号检索: 从 issue 复现代码提取 类名/方法名/函数名, 在 AST 索引里
+    精确匹配 (零 token 确定性)。无 traceback 或 LLM 空候选时的兜底线索。
+
+    issue 里的复现代码通常是用户自写的类 (repo 里不存在), 但方法名/函数名
+    (如 prev/next/infer/getitem) 常与 repo 真实符号重合, 匹配这些。
+    """
+    # 提取代码块
+    blocks = re.findall(r"```(?:python)?\n(.*?)```", issue, re.DOTALL)
+    text = "\n".join(blocks) if blocks else issue
+    symbols = set()
+    try:
+        tree = ast.parse(text)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                symbols.add(node.name)
+                for m in node.body:
+                    if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        symbols.add(m.name)
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                symbols.add(node.name)
+    except (SyntaxError, ValueError):
+        pass
+    # 兜底: 从纯文本提取标识符 (无代码块时)
+    if not symbols:
+        for tok in re.findall(r"\b([a-zA-Z_][a-zA-Z0-9_]{2,})\b", issue):
+            if re.match(r"^(get|set|infer|parse|serialize|deserialize|validate|_|is|has|to|from)", tok):
+                symbols.add(tok)
+    if not symbols:
+        return []
+    # 在索引里匹配 (方法名 > 类名 > 顶层函数名)
+    hits = []
+    seen = set()
+    for f, data in index.items():
+        if not f.endswith(".py"):
+            continue
+        for kls in data.get("classes", []):
+            for m in kls.get("methods", []):
+                if m["name"] in symbols:
+                    key = (f, m["name"], kls["name"])
+                    if key not in seen:
+                        seen.add(key)
+                        hits.append({"file": f, "function": m["name"],
+                                     "class_name": kls["name"],
+                                     "reason": "符号检索: issue符号匹配"})
+            if kls["name"] in symbols:
+                key = (f, "", kls["name"])
+                if key not in seen:
+                    seen.add(key)
+                    hits.append({"file": f, "function": "",
+                                 "class_name": kls["name"],
+                                 "reason": "符号检索: 类名匹配"})
+    for f, data in index.items():
+        for fn in data.get("funcs", []):
+            if fn in symbols:
+                key = (f, fn, "")
+                if key not in seen:
+                    seen.add(key)
+                    hits.append({"file": f, "function": fn, "class_name": "",
+                                 "reason": "符号检索: 顶层函数匹配"})
+    return hits[:max_hits]
+
+
 def locate(api_key: str, base_url: str, model: str,
            repo_dir: str, issue: str, max_retries: int = 3) -> dict:
-    """两阶段 LLM 定位: 全索引粗定位 → 候选文件方法体预览细定位."""
+    """两阶段 LLM 定位: 全索引粗定位 → 候选文件方法体预览细定位.
+    返回前做路径纠偏 (P0-1) 和符号检索补强 (P0-3).
+    """
     index = scan_repo(repo_dir)
     tb = traceback_hint(issue)
     tb_note = f"\n\nTraceback 线索 (确定性提取):\n{tb}" if tb else ""
@@ -205,6 +340,17 @@ def locate(api_key: str, base_url: str, model: str,
                                    issue=(issue + tb_note)[:4000])
     content = _call_llm(api_key, base_url, model, prompt, max_retries)
     candidates = _parse_candidates(content)
+
+    # P0-3 符号检索兜底: 无 traceback 或 LLM 空候选时, 从 issue 提取符号匹配索引
+    if not tb or not candidates:
+        sym = _symbol_matches(issue, index)
+        if sym:
+            merged_sym = list(sym)
+            for c in candidates:
+                key = (c.get("file", ""), c.get("function", ""), c.get("class_name", ""))
+                if key not in {(x["file"], x["function"], x["class_name"]) for x in merged_sym}:
+                    merged_sym.append(c)
+            candidates = merged_sym[:4]
 
     # 阶段2: 对 top 候选文件渲染方法体预览, 精确定位 (结果与阶段1合并)
     if candidates:
@@ -223,8 +369,11 @@ def locate(api_key: str, base_url: str, model: str,
                     if key not in seen and c.get("function"):
                         seen.add(key)
                         merged.append(c)
-                return {"candidates": merged[:4], "stage2": True, "top_file": top_file}
-    return {"candidates": candidates, "stage2": False}
+                candidates = merged[:4]
+
+    # P0-1 路径纠偏 (最后统一做)
+    candidates = _resolve_candidate_paths(candidates, index, repo_dir)
+    return {"candidates": candidates, "stage2": bool(candidates and candidates[0].get("file"))}
 
 
 def main():

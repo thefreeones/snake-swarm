@@ -972,7 +972,7 @@ Diff行数变化: {diff_lines}
     def fix(self, file_path: str, function: str, bug_description: str,
             error_type: str = "", trigger_test: str = None,
             use_cache: bool = False, enable_judges: bool = False,
-            class_name: str = "") -> FixResult:
+            class_name: str = "", injected_knowledge: str = "") -> FixResult:
         """
         修复单个bug。
 
@@ -984,6 +984,7 @@ Diff行数变化: {diff_lines}
             trigger_test: 快速验证输入(可选,如 "'abc', 1")
             use_cache: 是否使用文件缓存(P12)
             class_name: 所属类名(可选)——同名方法精确定位
+            injected_knowledge: 注入蛇头的额外知识 (P0-2 迭代反馈用)
 
         Returns:
             FixResult
@@ -1007,10 +1008,13 @@ Diff行数变化: {diff_lines}
             # 2. v0.7 学习层: 检索相关模式注入蛇头
             injected = self._inject_patterns(bug_description, error_type)
 
-            # 3. 蛇头分析 (P11+P12)
+            # 3. 蛇头分析 (P11+P12) —— 迭代反馈追加到模式检索之后
+            combined_knowledge = injected
+            if injected_knowledge:
+                combined_knowledge = (injected + "\n\n" + injected_knowledge).strip()
             head = self._run_head(file_path, function, bug_description,
                                   error_type, use_cache,
-                                  injected_knowledge=injected,
+                                  injected_knowledge=combined_knowledge,
                                   class_name=class_name)
             tokens["head"] = head["total_tokens"]
 
