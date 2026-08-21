@@ -491,13 +491,19 @@ class Snakes:
 
     def _run_head(self, file_path: str, function: str, bug_desc: str,
                   error_type: str = "", use_cache: bool = False,
-                  injected_knowledge: str = "", class_name: str = "") -> dict:
+                  injected_knowledge: str = "", class_name: str = "",
+                  baseline_content: str = None) -> dict:
         """跑蛇头分析"""
         complexity = self._classify_complexity(bug_desc, error_type)
         model = self.models["light_head"] if complexity == "light" else self.models["heavy_head"]
 
-        cache = self._get_cached_context(file_path)
-        full_code = cache["code"]
+        if baseline_content is not None:
+            # 迭代轮: 基于原始内容定位函数, 保证 target_code 与 diff 基准一致
+            full_code = baseline_content
+            cache = {"code": baseline_content, "functions": [], "line_count": len(baseline_content.splitlines())}
+        else:
+            cache = self._get_cached_context(file_path)
+            full_code = cache["code"]
 
         target_code = self._locate_function(full_code, function, class_name)
         if use_cache and len(cache["functions"]) > 1:
@@ -646,10 +652,14 @@ except Exception as e:
                                 if 'int' in names and 'bool' not in names:
                                     issues.append("bool-is-int陷阱:isinstance未排除bool")
 
-        # 范围溢出
+        # 范围溢出 (2026-08-22 修正: 阈值从10放宽到40, 避免误报有效修复)
+        # 背景: 1614/1252/1702 等实例修复需增删多行 (如 _infer_str_format_call
+        # 加逻辑、from_iso_datetime 重写), 行数差>10 被误判「范围溢出」,
+        # 但 patch 有效且测试全过。真正风险是修复蛇重写成无关内容,
+        # 行数差本身不是有效判据。40行以上才告警 (重写整函数的极端情况)。
         orig_lines = original.split("\n")
         fixed_lines = fixed.split("\n")
-        if abs(len(fixed_lines) - len(orig_lines)) > 10:
+        if abs(len(fixed_lines) - len(orig_lines)) > 40:
             issues.append(f"范围溢出:修改行数差{abs(len(fixed_lines)-len(orig_lines))}行")
 
         return {
@@ -972,7 +982,8 @@ Diff行数变化: {diff_lines}
     def fix(self, file_path: str, function: str, bug_description: str,
             error_type: str = "", trigger_test: str = None,
             use_cache: bool = False, enable_judges: bool = False,
-            class_name: str = "", injected_knowledge: str = "") -> FixResult:
+            class_name: str = "", injected_knowledge: str = "",
+            baseline_content: str = None) -> FixResult:
         """
         修复单个bug。
 
@@ -985,6 +996,10 @@ Diff行数变化: {diff_lines}
             use_cache: 是否使用文件缓存(P12)
             class_name: 所属类名(可选)——同名方法精确定位
             injected_knowledge: 注入蛇头的额外知识 (P0-2 迭代反馈用)
+            baseline_content: 迭代轮传入的原始文件内容基准。
+                修复蛇读磁盘当前文件(已被上一轮patch修改), 生成的patch上下文
+                基于修改后内容 → apply到干净repo必失败。传原始内容则生成
+                「原始→本轮修复」完整diff, apply直接成功。
 
         Returns:
             FixResult
@@ -1011,11 +1026,12 @@ Diff行数变化: {diff_lines}
             # 3. 蛇头分析 (P11+P12) —— 迭代反馈追加到模式检索之后
             combined_knowledge = injected
             if injected_knowledge:
-                combined_knowledge = (injected + "\n\n" + injected_knowledge).strip()
+                combined_knowledge = (injected + "\n\n" + injected_knowledge) if injected else injected_knowledge
             head = self._run_head(file_path, function, bug_description,
                                   error_type, use_cache,
                                   injected_knowledge=combined_knowledge,
-                                  class_name=class_name)
+                                  class_name=class_name,
+                                  baseline_content=baseline_content)
             tokens["head"] = head["total_tokens"]
 
             # 3. 修复蛇
@@ -1062,8 +1078,13 @@ Diff行数变化: {diff_lines}
             tokens["audit"] = audit["token_cost"]
 
             # 7. 生成patch (基于目标代码实际位置的精确替换)
-            with open(file_path, encoding="utf-8") as f:
-                original_full = f.read()
+            #    baseline_content 非空时(迭代轮): 用传入的原始内容做 diff 基准,
+            #    避免「读磁盘当前文件(已被上轮patch修改) → 上下文不匹配 → apply必失败」
+            if baseline_content is not None:
+                original_full = baseline_content
+            else:
+                with open(file_path, encoding="utf-8") as f:
+                    original_full = f.read()
 
             def _replace_at_location(orig: str, target: str, new: str,
                                      class_hint: str = "") -> str:

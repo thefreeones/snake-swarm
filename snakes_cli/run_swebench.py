@@ -363,6 +363,13 @@ def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
                 iterations = []
                 feedback = ""
                 final_r = None
+                # 记录原始文件内容作为迭代轮的 diff 基准 (r2 的 fix 读磁盘是 r1 修改后状态,
+                # 生成的 patch 上下文与干净 repo 不匹配 → apply 必失败)
+                try:
+                    with open(file_path, encoding="utf-8") as _f:
+                        baseline_content = _f.read()
+                except OSError:
+                    baseline_content = None
                 for it in range(3):  # 第1轮 + 最多2次迭代
                     r = snakes.fix(
                         file_path=file_path,
@@ -371,6 +378,7 @@ def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
                         class_name=class_name,
                         enable_judges=False,
                         injected_knowledge=feedback,
+                        baseline_content=baseline_content if it > 0 else None,
                     )
                     iterations.append({"round": it + 1, "tokens": r.tokens,
                                        "success": r.success,
