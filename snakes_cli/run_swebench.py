@@ -103,8 +103,10 @@ def apply_patch(repo_dir: Path, patch: str, strip: int = 1) -> bool:
         return True
     # 失败: 用 basename 反查仓库内真实路径 (e.g. brain_builtin_inference.py → astroid/brain/brain_builtin_inference.py)
     def _resolve_by_basename(p: str) -> str:
+        _EX = (".venv", "venv", "site-packages", "node_modules", "__pycache__",
+               ".tox", ".pytest_cache", "build", "dist", ".git")
         for root, dirs, files in os.walk(str(repo_dir)):
-            dirs[:] = [d for d in dirs if d not in (".git", ".venv", "venv", "__pycache__")]
+            dirs[:] = [d for d in dirs if not any(ex in d for ex in _EX)]
             for fn in files:
                 if fn == os.path.basename(p):
                     full = os.path.join(root, fn)
@@ -210,12 +212,14 @@ def _traceback_line_to_func(repo_dir: Path, issue: str) -> dict:
     """
     import ast as _ast
     result = {}
+    _EX = (".venv", "venv", "site-packages", "node_modules", "__pycache__",
+           ".tox", ".pytest_cache", "build", "dist", ".git")
     for m in re.finditer(r'File "([^"]+)", line (\d+)', issue):
         fpath, lineno = m.group(1), int(m.group(2))
         fname = os.path.basename(fpath)
         # 在 repo 里找同名文件
         for root, dirs, files in os.walk(str(repo_dir)):
-            dirs[:] = [d for d in dirs if d not in (".git", ".venv", "venv", "__pycache__")]
+            dirs[:] = [d for d in dirs if not any(ex in d for ex in _EX)]
             for fn in files:
                 if fn == fname:
                     full = os.path.join(root, fn)

@@ -24,12 +24,14 @@ import sys
 def scan_repo(repo_dir: str, max_files: int = 60) -> dict:
     """AST 扫描 repo, 构建 文件→类→方法 索引 (零token)."""
     index = {}
+    _EXCLUDE_SUBSTR = (
+        ".venv", "venv", "site-packages", "node_modules", "__pycache__",
+        ".tox", ".pytest_cache", "build", "dist", "docs", ".git",
+    )
     for root, dirs, files in os.walk(repo_dir):
-        # 跳过常见噪声目录
-        dirs[:] = [d for d in dirs if d not in (
-            ".git", ".venv", "venv", "node_modules", "__pycache__",
-            ".tox", ".pytest_cache", "build", "dist", "docs", "tests", "test",
-        )]
+        # 跳过噪声目录 (包含匹配, 覆盖 .venv310 等变体 + site-packages 副本)
+        dirs[:] = [d for d in dirs
+                   if not any(ex in d for ex in _EXCLUDE_SUBSTR)]
         for fname in files:
             if not fname.endswith(".py"):
                 continue
