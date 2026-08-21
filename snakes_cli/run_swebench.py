@@ -47,7 +47,8 @@ def clone_checkout(repo: str, base_commit: str, env_setup: str = "") -> Path:
     repo_dir = ENV_ROOT / repo_name
     if not (repo_dir / ".git").exists():
         subprocess.run(
-            ["git", "clone", "--quiet", f"https://github.com/{repo}.git", str(repo_dir)],
+            ["git", "-c", "http.proxy=", "-c", "https.proxy=",
+             "clone", "--quiet", f"https://github.com/{repo}.git", str(repo_dir)],
             check=True, timeout=300,
         )
     # 先清残留 (test_patch/蛇群patch/临时文件), 再 fetch
@@ -55,10 +56,11 @@ def clone_checkout(repo: str, base_commit: str, env_setup: str = "") -> Path:
                    check=False, timeout=60)
     subprocess.run(["git", "-C", str(repo_dir), "clean", "-fd"],
                    check=False, timeout=60)
-    # fetch base_commit (带重试, git代理偶尔握手失败)
+    # fetch base_commit (带重试; 显式直连, 不依赖 v2rayN 代理)
     for attempt in range(3):
-        r = subprocess.run(["git", "-C", str(repo_dir), "fetch", "--quiet",
-                            "origin", base_commit],
+        r = subprocess.run(["git", "-C", str(repo_dir),
+                            "-c", "http.proxy=", "-c", "https.proxy=",
+                            "fetch", "--quiet", "origin", base_commit],
                            capture_output=True, text=True, timeout=120)
         if r.returncode == 0:
             break
