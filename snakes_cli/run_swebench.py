@@ -58,18 +58,25 @@ def clone_checkout(repo: str, base_commit: str, env_setup: str = "") -> Path:
     # fetch base_commit (带重试; 代理优先, 直连兜底)
     # 策略: 代理(v2rayN)通常开着, 直连在GFW波动时可能失败;
     #       代理挂时直连兜底 (R3曾被代理挂掉连累, R4曾因强制直连失败)
-    for attempt in range(3):
-        use_proxy = (attempt % 2 == 0)  # 0:代理, 1:直连, 2:代理
-        cmd = ["git", "-C", str(repo_dir)]
-        if not use_proxy:
-            cmd += ["-c", "http.proxy=", "-c", "https.proxy="]
-        cmd += ["fetch", "--quiet", "origin", base_commit]
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if r.returncode == 0:
-            break
-        if attempt == 2:
-            raise RuntimeError(f"git fetch failed after 3 attempts: {r.stderr[:200]}")
-        time.sleep(5)
+    # 2026-08-28 修复: 若本地已有该 commit (GitHub 对 force-push 清理的历史
+    #   SHA 会拒绝 fetch), 直接跳过 fetch —— 零网络依赖, 避免 fetch 必失败
+    have_commit = subprocess.run(
+        ["git", "-C", str(repo_dir), "cat-file", "-e", f"{base_commit}^{{commit}}"],
+        capture_output=True, text=True,
+    ).returncode == 0
+    if not have_commit:
+        for attempt in range(3):
+            use_proxy = (attempt % 2 == 0)  # 0:代理, 1:直连, 2:代理
+            cmd = ["git", "-C", str(repo_dir)]
+            if not use_proxy:
+                cmd += ["-c", "http.proxy=", "-c", "https.proxy="]
+            cmd += ["fetch", "--quiet", "origin", base_commit]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            if r.returncode == 0:
+                break
+            if attempt == 2:
+                raise RuntimeError(f"git fetch failed after 3 attempts: {r.stderr[:200]}")
+            time.sleep(5)
     subprocess.run(["git", "-C", str(repo_dir), "checkout", "--quiet", base_commit],
                    check=True, timeout=60)
     # 重置到干净状态 (清掉之前 apply 的 patch)
