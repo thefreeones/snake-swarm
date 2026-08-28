@@ -380,6 +380,25 @@ def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
                         baseline_content = _f.read()
                 except OSError:
                     baseline_content = None
+                # 方向A: 检索相似历史修复注入 (同类函数修过 → 直接给参考)
+                kb_note = ""
+                try:
+                    from fix_knowledge import search_fix
+                    hits = search_fix(cand.get("file", ""), function, class_name,
+                                      repo=inst.get("repo", ""))
+                    if hits:
+                        parts = []
+                        for h in hits:
+                            parts.append(
+                                f"【历史修复参考 {h['instance_id']}】"
+                                f"文件 {h['file']} 函数 {h.get('class_name','')}.{h['function']}\n"
+                                f"原问题: {h['issue'][:300]}\n"
+                                f"有效patch:\n{h['patch'][:800]}")
+                        kb_note = "\n\n".join(parts[:2])
+                except Exception as e:
+                    print(f"  [kb] search_fix failed: {e}", flush=True)
+                if kb_note:
+                    feedback = (feedback + "\n\n" + kb_note) if feedback else kb_note
                 for it in range(3):  # 第1轮 + 最多2次迭代
                     r = snakes.fix(
                         file_path=file_path,
@@ -417,6 +436,20 @@ def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
                             attempt["iterations"] = iterations
                             record["resolved"] = True
                             record["attempts"].append(attempt)
+                            # 方向A: 成功修复自动入库 (供后续实例检索复用)
+                            try:
+                                from fix_knowledge import save_fix
+                                save_fix(
+                                    instance_id=inst["instance_id"],
+                                    repo=inst.get("repo", ""),
+                                    file=cand.get("file", ""),
+                                    function=function,
+                                    class_name=class_name,
+                                    issue=problem,
+                                    patch=r.patch,
+                                )
+                            except Exception as e:
+                                print(f"  [kb] save_fix failed: {e}", flush=True)
                             break
                         # ftp 过但 ptp 回归 → 反馈 ptp 失败详情继续迭代
                         ptp_fails = [f"{k}:{v}" for k, v in after_ptp.items() if v != "PASS"]
@@ -436,8 +469,9 @@ def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
 
                 if record.get("resolved"):
                     break
-                # P1-1 回归保护: 2轮迭代后 ftp 仍全败的候选视为劣质,
-                # 跳过剩余候选 (省 token)
+                # P1-1 回归保护: 2轮迭代后 ftp 仍全败的候选标记劣质,
+                # 继续尝试下一个候选 (2026-08-29 修复: 原实现 break 跳出整个
+                # 候选循环, 导致 15/26 实例只尝试1个候选, R4 多候选救回能力被砍)
                 ftp_all_fail = all(
                     "ftp_fail" in it and it["ftp_fail"] == len(fail_to_pass)
                     for it in iterations if "ftp_fail" in it
@@ -445,7 +479,7 @@ def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
                 if ftp_all_fail:
                     attempt["error"] = "候选2轮迭代ftp全败, 标记劣质跳过"
                     record["attempts"].append(attempt)
-                    break
+                    continue
                 # 全部迭代失败: 记录最后状态
                 if final_r is None and iterations:
                     last = iterations[-1]
