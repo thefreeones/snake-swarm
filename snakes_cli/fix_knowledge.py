@@ -64,7 +64,7 @@ def search_fix(file: str, function: str, class_name: str = "",
             score += 3
         if r.get("class_name") == class_name and class_name:
             score += 1
-        if score >= 3:  # 至少 function 命中或 file+repo
+        if score >= 2:  # file 命中(2) 或 function 命中(3+) 即有参考价值
             scored.append((score, r))
     scored.sort(key=lambda x: -x[0])
     return [r for _, r in scored[:top_k]]
