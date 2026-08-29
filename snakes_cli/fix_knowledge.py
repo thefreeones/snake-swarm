@@ -46,7 +46,8 @@ def save_fix(instance_id: str, repo: str, file: str, function: str,
 
 def search_fix(file: str, function: str, class_name: str = "",
                repo: str = "", top_k: int = 2) -> list:
-    """检索相似历史修复. 返回 [{file, function, class_name, issue, patch}].
+    """检索相似历史修复. 返回 [{file, function, class_name, issue, patch}, ...]
+    (按相关度降序, 调用方直接取字段, 无需解包元组)
     匹配优先级: 同 repo+file+function > 同 file+function > 同 function.
     """
     rows = _load()
@@ -66,7 +67,7 @@ def search_fix(file: str, function: str, class_name: str = "",
         if score >= 3:  # 至少 function 命中或 file+repo
             scored.append((score, r))
     scored.sort(key=lambda x: -x[0])
-    return scored[:top_k]
+    return [r for _, r in scored[:top_k]]
 
 
 def kb_stats() -> dict:

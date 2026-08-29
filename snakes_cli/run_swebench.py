@@ -519,6 +519,21 @@ def main():
     if args.limit:
         instances = instances[:args.limit]
 
+    # 断点续跑: 跳过 out 文件里已完成的 instance_id (R5 中断后恢复用)
+    done_ids = set()
+    if os.path.exists(args.out):
+        with open(args.out, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        done_ids.add(json.loads(line)["instance_id"])
+                    except (json.JSONDecodeError, KeyError):
+                        pass
+    if done_ids:
+        skipped = [i for i in instances if i["instance_id"] in done_ids]
+        instances = [i for i in instances if i["instance_id"] not in done_ids]
+        print(f"[resume] 跳过已完成的 {len(skipped)} 个, 剩余 {len(instances)} 个", flush=True)
+
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "a", encoding="utf-8") as f:
         for inst in instances:
