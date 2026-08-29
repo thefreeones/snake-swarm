@@ -357,7 +357,19 @@ def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
             return record
 
         # 5. 逐候选修复
-        for ci, cand in enumerate(candidates[:3]):
+        # 优化1: 候选按 (file,function,class) 去重 — R5 中 1524/1229 的 3 候选
+        # 是同一函数 __call__/_serialize, 重复修复纯浪费 (2026-08-29)
+        # 优化3: 候选上限 3→2 — R5 中 7 成功实例 6 个是候选#1, 仅 927 候选#2,
+        # 无候选#3 成功案例, 省 1/3 候选成本 (2026-08-29)
+        seen_cands = set()
+        deduped = []
+        for c in candidates[:2]:
+            k = (c.get("file", ""), c.get("function", ""), c.get("class_name", ""))
+            if k not in seen_cands:
+                seen_cands.add(k)
+                deduped.append(c)
+        candidates = deduped
+        for ci, cand in enumerate(candidates[:2]):
             file_path = os.path.join(str(repo_dir), cand.get("file", ""))
             function = cand.get("function", "")
             class_name = cand.get("class_name", "")
@@ -399,6 +411,8 @@ def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
                     print(f"  [kb] search_fix failed: {e}", flush=True)
                 if kb_note:
                     feedback = (feedback + "\n\n" + kb_note) if feedback else kb_note
+                # 注: 迭代上限保持 3 — R5 中 927 靠候选2的第3轮迭代成功,
+                # 砍到2会丢 resolved (2026-08-29 数据验证后撤销了3→2优化)
                 for it in range(3):  # 第1轮 + 最多2次迭代
                     r = snakes.fix(
                         file_path=file_path,
