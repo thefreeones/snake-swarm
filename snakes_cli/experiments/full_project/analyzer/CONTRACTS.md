@@ -45,7 +45,7 @@ U4: CLI入口 — argparse + 文件/目录遍历 + 输出控制
 产出: report.md 或 stdout JSON
 
 ## 验证标准
-测试文件: D:/competation/design/snakes_cli/experiments/full_project/analyzer/test_samples/
+测试文件: <SNAKE_SWARM_DATA>/snakes_cli/experiments/full_project/analyzer/test_samples/
 - sample_clean.py: 0个问题（阴性对照）
 - sample_dirty.py: 包含5种问题的文件
 - sample_dir/: 多文件目录

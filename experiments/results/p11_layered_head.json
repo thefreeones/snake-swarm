@@ -232,7 +232,7 @@
   "appendix": {
     "heavy_prompt_template": "资深Python代码审查专家 + 完整bug信息 + 源代码 + 6项分析要求（根因/架构/影响/修复/测试/防御）",
     "light_prompt_template": "分析Python bug + 简化bug描述 + 相关代码片段 + 3项JSON输出（root_cause/fix/confidence）",
-    "p8_baseline_reference": "D:/competation/design/experiments/results/p8_case_study.json",
-    "raw_api_responses": "D:/competation/design/experiments/results/p11_layered_head.json (initial dump)"
+    "p8_baseline_reference": "<SNAKE_SWARM_DATA>/experiments/results/p8_case_study.json",
+    "raw_api_responses": "<SNAKE_SWARM_DATA>/experiments/results/p11_layered_head.json (initial dump)"
   }
 }

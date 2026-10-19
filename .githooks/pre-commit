@@ -1,0 +1,8 @@
+#!/bin/sh
+# 提交前密钥扫描。启用方式（每台机器一次）：
+#   git config core.hooksPath .githooks
+python "$(git rev-parse --show-toplevel)/scripts/check_secrets.py" --staged || {
+    echo ""
+    echo "提交被阻止：暂存区含疑似密钥。修复后重新 git add。"
+    exit 1
+}

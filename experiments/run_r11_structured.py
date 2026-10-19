@@ -627,7 +627,7 @@ def parse_judge_output(content):
 # ============================================================
 
 def run_experiment():
-    os.makedirs("D:/competation/design/experiments/results", exist_ok=True)
+    os.makedirs("<SNAKE_SWARM_DATA>/experiments/results", exist_ok=True)
     
     scenarios = [
         {
@@ -743,7 +743,7 @@ def analyze_and_compare(r11_results):
     import json as _json
     
     # Load P2 baseline
-    with open("D:/competation/design/experiments/results/p2_deviation_log.json", 'r', encoding='utf-8') as f:
+    with open("<SNAKE_SWARM_DATA>/experiments/results/p2_deviation_log.json", 'r', encoding='utf-8') as f:
         p2 = _json.load(f)
     
     # P2 baseline deviations
@@ -974,7 +974,7 @@ def build_conclusion(comparison, r11_results):
 
 def main():
     # Load P2 baseline for comparison
-    with open("D:/competation/design/experiments/results/p2_deviation_log.json", 'r', encoding='utf-8') as f:
+    with open("<SNAKE_SWARM_DATA>/experiments/results/p2_deviation_log.json", 'r', encoding='utf-8') as f:
         p2 = json.load(f)
     
     p2_data = {}
@@ -1002,7 +1002,7 @@ def main():
     }
     
     # Save
-    output_path = "D:/competation/design/experiments/results/p2_structured_validation.json"
+    output_path = "<SNAKE_SWARM_DATA>/experiments/results/p2_structured_validation.json"
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(full_output, f, ensure_ascii=False, indent=2)
     

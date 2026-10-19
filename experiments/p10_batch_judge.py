@@ -9,7 +9,7 @@ import json, time, os, urllib.request, sys
 # ── API Config ──
 hex_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '_apikey_hex.txt')
 if not os.path.exists(hex_path):
-    hex_path = 'D:/competation/design/_apikey_hex.txt'
+    hex_path = '<SNAKE_SWARM_DATA>/_apikey_hex.txt'
 with open(hex_path, 'r') as f:
     API_KEY = bytes.fromhex(f.read().strip()).decode('utf-8')
 BASE_URL = "https://n.tokeness.io/v1"
@@ -623,7 +623,7 @@ def main():
         }
     }
     
-    out_path = "D:/competation/design/experiments/results/p10_batch_judge.json"
+    out_path = "<SNAKE_SWARM_DATA>/experiments/results/p10_batch_judge.json"
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(output, f, ensure_ascii=False, indent=2)

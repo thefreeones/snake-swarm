@@ -3,7 +3,7 @@
 """
 import json
 import sys
-sys.path.insert(0, 'D:/competation/design/experiments')
+sys.path.insert(0, '<SNAKE_SWARM_DATA>/experiments')
 from deterministic_auditor import DeterministicAuditor
 
 auditor = DeterministicAuditor()

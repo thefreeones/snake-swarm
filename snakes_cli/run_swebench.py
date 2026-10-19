@@ -24,8 +24,9 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(__file__))
 from locator import locate, scan_repo, render_index  # noqa: E402
 
-ENV_ROOT = Path(r"D:/competation/design/swebench_env")
-DATA_DIR = Path(r"D:/competation/design/swebench_data")
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+ENV_ROOT = Path(os.environ.get("SWEBENCH_ENV_ROOT") or (_REPO_ROOT.parent / "swebench_env"))
+DATA_DIR = Path(os.environ.get("SWEBENCH_DATA_DIR") or (_REPO_ROOT / "swebench_data"))
 CONFIG = json.load(open(os.path.expanduser("~/.snakes_config.json"), encoding="utf-8"))
 
 # 依赖预装 (轻量仓库的手动依赖清单 + Python 版本)

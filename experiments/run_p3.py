@@ -415,7 +415,7 @@ detected = sum(1 for cr in all_results if cr["contract_verdict"] == cr.get("expe
 print(f"\n契约检测率: {detected}/{len(all_results)}")
 
 # Save
-results_dir = "D:/competation/design/experiments/results"
+results_dir = "<SNAKE_SWARM_DATA>/experiments/results"
 os.makedirs(results_dir, exist_ok=True)
 
 final_report = {

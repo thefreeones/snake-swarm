@@ -34,11 +34,11 @@ for p in config.get('custom_providers', []):
 assert API_KEY, "Tokeness API key not found!"
 
 # Load P8 data
-with open(r'D:\competation\design\experiments\results\p8_case_study.json', 'r') as f:
+with open(r'<SNAKE_SWARM_DATA>\experiments\results\p8_case_study.json', 'r') as f:
     p8_data = json.load(f)
 
 # Load slugify source
-with open(r'D:\competation\design\experiments\p8_work\slugify\slugify.py', 'r') as f:
+with open(r'<SNAKE_SWARM_DATA>\experiments\p8_work\slugify\slugify.py', 'r') as f:
     SLUGIFY_SOURCE = f.read()
 SLUGIFY_LINES = SLUGIFY_SOURCE.split('\n')
 
@@ -254,7 +254,7 @@ def build_warm_prompt(bug_id, cache):
     
     # For add_uppercase_char, it's in special.py not slugify.py
     if func_code is None and func_name == 'add_uppercase_char':
-        special_path = r'D:\competation\design\experiments\p8_work\slugify\special.py'
+        special_path = r'<SNAKE_SWARM_DATA>\experiments\p8_work\slugify\special.py'
         if os.path.exists(special_path):
             with open(special_path, 'r') as f:
                 special_source = f.read()
@@ -571,7 +571,7 @@ if __name__ == '__main__':
     results = run_experiment()
     
     # Save results
-    output_path = r'D:\competation\design\experiments\results\p12_head_cache.json'
+    output_path = r'<SNAKE_SWARM_DATA>\experiments\results\p12_head_cache.json'
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
     

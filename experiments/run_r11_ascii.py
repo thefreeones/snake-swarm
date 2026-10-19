@@ -130,14 +130,14 @@ def main():
     global PROMPT_TEMPLATES
 
     # Load scenarios with prompt templates
-    with open("D:/competation/design/experiments/r11_scenarios.json", 'r', encoding='utf-8') as f:
+    with open("<SNAKE_SWARM_DATA>/experiments/r11_scenarios.json", 'r', encoding='utf-8') as f:
         all_data = json.load(f)
 
     PROMPT_TEMPLATES = all_data["_prompts"]
     scenarios = {k: v for k, v in all_data.items() if not k.startswith('_')}
 
     # Load P2 baseline
-    with open("D:/competation/design/experiments/results/p2_deviation_log.json", 'r', encoding='utf-8') as f:
+    with open("<SNAKE_SWARM_DATA>/experiments/results/p2_deviation_log.json", 'r', encoding='utf-8') as f:
         p2 = json.load(f)
     p2_data = {}
     for je in p2['judge_evaluations']:
@@ -439,7 +439,7 @@ def main():
     full_output = dict(comparison)
     full_output["r11_raw_results"] = all_results
 
-    output_path = "D:/competation/design/experiments/results/p2_structured_validation.json"
+    output_path = "<SNAKE_SWARM_DATA>/experiments/results/p2_structured_validation.json"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(full_output, f, ensure_ascii=False, indent=2)

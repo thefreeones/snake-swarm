@@ -21,7 +21,7 @@ import yaml
 # ============================================================
 def load_api_key():
     """Load Tokeness API key from hex-encoded file (avoids masking)"""
-    hex_path = r'D:\competation\design\experiments\_apikey_hex.txt'
+    hex_path = r'<SNAKE_SWARM_DATA>\experiments\_apikey_hex.txt'
     if os.path.exists(hex_path):
         with open(hex_path, 'r') as f:
             hex_key = f.read().strip()
@@ -70,7 +70,7 @@ def call_llm(model, messages, temperature=0.3, max_tokens=6000, max_retries=3):
 # ============================================================
 # Load Scenarios
 # ============================================================
-with open("D:/competation/design/experiments/r11_scenarios.json", 'r', encoding='utf-8') as f:
+with open("<SNAKE_SWARM_DATA>/experiments/r11_scenarios.json", 'r', encoding='utf-8') as f:
     all_data = json.load(f)
 
 PROMPT_TEMPLATES = all_data["_prompts"]
@@ -256,7 +256,7 @@ def main():
     print("=" * 70)
     
     # Load R11 control group results (S2-B)
-    with open("D:/competation/design/experiments/results/p2_structured_validation.json", 'r', encoding='utf-8') as f:
+    with open("<SNAKE_SWARM_DATA>/experiments/results/p2_structured_validation.json", 'r', encoding='utf-8') as f:
         r11 = json.load(f)
     
     control_results = {}
@@ -536,7 +536,7 @@ def main():
     # ========================================================
     # Save results
     # ========================================================
-    output_path = "D:/competation/design/experiments/results/p5_auditor.json"
+    output_path = "<SNAKE_SWARM_DATA>/experiments/results/p5_auditor.json"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
@@ -547,10 +547,10 @@ def main():
     print(f"\n{output['chinese_analysis']}")
     
     # Cleanup
-    hex_path = r'D:\competation\design\experiments\_apikey_hex.txt'
+    hex_path = r'<SNAKE_SWARM_DATA>\experiments\_apikey_hex.txt'
     if os.path.exists(hex_path):
         os.remove(hex_path)
-    key_path = r'D:\competation\design\experiments\_apikey.txt'
+    key_path = r'<SNAKE_SWARM_DATA>\experiments\_apikey.txt'
     if os.path.exists(key_path):
         os.remove(key_path)
 

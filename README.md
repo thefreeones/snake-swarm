@@ -114,6 +114,9 @@ snakes_cli/
 
 ```bash
 # 需本地已有各 repo 的 clone 与对应 Python 环境（astroid 3.10 / marshmallow 3.11）
+# 评测仓库目录默认 ../swebench_env，结果目录默认 ./swebench_data，可用环境变量覆盖：
+export SWEBENCH_ENV_ROOT=/path/to/swebench_env
+export SWEBENCH_DATA_DIR=/path/to/swebench_data
 python snakes_cli/run_swebench.py --instances swebench_results_r3.jsonl
 ```
 
@@ -168,6 +171,21 @@ python snakes_cli/cli.py scan tests/fixtures/slugify.py \
 
 - **中文投稿版**：已投稿（CCF-B 期刊，审稿中）；全文待审稿结束后放出
 - **英文预印本**：[Zenodo DOI: 10.5281/zenodo.21780091](https://doi.org/10.5281/zenodo.21780091)（早期版本，仅含 P0 阶段六个实验）
+
+---
+
+## 数据与隐私
+
+- `snakes_cli/fix_knowledge.jsonl` 的 61 条历史修复采集自公开仓库的 PR；其中少量第三方邮箱原样出现在上游 `CONTRIBUTORS.txt` 的 diff 中（公开数据，未做改动）。
+- `experiments/` 下是历史实验脚本，本机数据路径已替换为 `<SNAKE_SWARM_DATA>` 占位符，说明见 `experiments/README.md`。
+- 仓库不含 API key、私钥、手机号、身份证号或作者个人联系方式。
+
+提交前自动扫描（建议每台机器启用一次）：
+
+```bash
+git config core.hooksPath .githooks   # 启用 pre-commit 钩子
+python scripts/check_secrets.py       # 也可手动全量扫描当前 HEAD
+```
 
 ---
 

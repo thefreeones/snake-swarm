@@ -341,20 +341,20 @@ def run_case(case):
     return result
 
 def main():
-    os.makedirs("D:/competation/design/experiments/results", exist_ok=True)
+    os.makedirs("<SNAKE_SWARM_DATA>/experiments/results", exist_ok=True)
     
     results = []
     for case in CASES:
         result = run_case(case)
         results.append(result)
         # Save after each case as backup
-        with open("D:/competation/design/experiments/results/full_pipeline_batch1.json", "w", encoding="utf-8") as f:
+        with open("<SNAKE_SWARM_DATA>/experiments/results/full_pipeline_batch1.json", "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
         time.sleep(1)
     
     print(f"\n{'='*60}")
     print(f"ALL DONE! {len(results)} cases processed.")
-    print(f"Results saved to: D:/competation/design/experiments/results/full_pipeline_batch1.json")
+    print(f"Results saved to: <SNAKE_SWARM_DATA>/experiments/results/full_pipeline_batch1.json")
     
     # Summary
     correct_count = sum(1 for r in results if r["correct"])

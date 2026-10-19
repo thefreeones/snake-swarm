@@ -32,7 +32,7 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-RESULTS_DIR = "D:/competation/design/experiments/results"
+RESULTS_DIR = "<SNAKE_SWARM_DATA>/experiments/results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 # ============================================================
