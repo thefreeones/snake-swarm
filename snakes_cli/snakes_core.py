@@ -757,7 +757,8 @@ except Exception as e:
 5. 不修改任何不相关的代码
 
 输出要求:
-- 输出完整的函数代码(含装饰器和docstring)
+- 只输出目标函数本身的完整代码(含装饰器和docstring)
+- 禁止输出文件中其他函数/类/import语句/相邻代码
 - 包裹在```python```中
 - 函数名必须与原函数名一致"""
 
@@ -766,6 +767,9 @@ except Exception as e:
         api_warning = ""
         if contract["public_api_warning"]:
             api_warning = "\n⚠️ 警告: 此函数为公共API，签名不可变。修改签名会破坏所有调用方。"
+        _test_block = ""
+        if test_code:
+            _test_block = "已有测试(必须通过):\n```python\n" + test_code[:1500] + "\n```"
 
         user = f"""任务: 重写函数 {contract['function']}
 
@@ -782,11 +786,11 @@ Bug描述: {bug_desc}
 
 蛇头分析: {head_analysis[:800]}
 
-{("已有测试(必须通过):\n```python\n" + test_code[:1500] + "\n```" if test_code else "")}
+{_test_block}
 
 请在不看原始实现的情况下，从零重写此函数。只输出```python```包裹的完整函数代码。"""
 
-        return self._call(model, system, user, temperature=temp, max_tokens=4096)
+        return self._call(model, system, user, temperature=temp, max_tokens=16384)
 
     # ══════════════════════════════════════════════════════════
     # v0.7 蛇尾结构化自述

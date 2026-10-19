@@ -164,6 +164,64 @@ def apply_patch(repo_dir: Path, patch: str, strip: int = 1) -> bool:
     return False
 
 
+def _extract_function_slice(orig: str, function: str, class_name: str = "") -> str:
+    """方案B: 从原始文件提取目标函数源码切片 (供 _audit 行数差比较).
+
+    与 _replace_for_rewrite 定位逻辑一致: AST 行号精确定位 (class 限定).
+    """
+    import ast as _ast
+    try:
+        tree = _ast.parse(orig)
+        for node in _ast.walk(tree):
+            if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)) and node.name == function:
+                if class_name:
+                    for parent in _ast.walk(tree):
+                        if isinstance(parent, _ast.ClassDef) and node in list(parent.body):
+                            return _ast.get_source_segment(orig, node) or ""
+                    continue
+                return _ast.get_source_segment(orig, node) or ""
+    except SyntaxError:
+        pass
+    # 回退: 正则定位
+    m = re.search(r'(?:^|\n)(    )?def ' + re.escape(function) + r'\(.*?(?=\n(?!    |\t))', orig, re.DOTALL)
+    return m.group(0) if m else ""
+
+
+def _replace_for_rewrite(orig: str, new_code: str, function: str,
+                         class_name: str = "") -> str:
+    """方案B: 在原始文件全文中定位 function 的实际位置, 替换为重写代码.
+
+    与 snakes_core.fix() 内 _replace_at_location 逻辑一致:
+    优先 AST 行号精确定位 (class 限定), 失败回退 find 首次匹配.
+    """
+    import ast as _ast
+    try:
+        tree = _ast.parse(orig)
+        lines = orig.split("\n")
+        target_first = ""
+        for node in _ast.walk(tree):
+            if isinstance(node, _ast.FunctionDef) and node.name == function:
+                if class_name:
+                    parent_cls = None
+                    for parent in _ast.walk(tree):
+                        if isinstance(parent, _ast.ClassDef):
+                            for item in parent.body:
+                                if item is node:
+                                    parent_cls = parent.name
+                    if parent_cls != class_name:
+                        continue
+                start = node.lineno - 1
+                end = node.end_lineno
+                actual = "\n".join(lines[start:end])
+                lines[start:end] = new_code.rstrip("\n").split("\n")
+                return "\n".join(lines)
+    except SyntaxError:
+        pass
+    # 回退: AST 定位失败 → 返回原内容不变 (生成的空 patch 会被 apply_patch 拒绝,
+    # 安全降级为「重写未应用」, 不冒险做无 target 的模糊替换)
+    return orig
+
+
 def run_tests(python: Path, repo_dir: Path, test_ids: list, timeout: int = 300) -> dict:
     """运行测试. 返回 {test_id: 'PASS'|'FAIL'|'ERROR'}.
 
@@ -478,6 +536,84 @@ def evaluate_instance(inst: dict, out_fd, dry_run: bool = False) -> dict:
                                 f"{ftp_fails[:3]}"
                                 f"\n请分析为什么修复没有让这些测试通过, 重新输出修复。")
                     iterations[-1]["ftp_fail"] = len(ftp_fails)
+                    # ★方案B: 迭代2轮仍失败 → 触发黑箱重写 (2026-08-31 实验)
+                    # 触发点: it==1 (第2轮) 且 ftp 仍失败。复用 snakes._extract_contract
+                    # + _run_blackbox_rewrite + _audit, 重写产物过 L1 审计才应用。
+                    if it == 1 and ftp_fails and not record.get("resolved"):
+                        rewrite_info = {}
+                        try:
+                            # 回滚到干净状态 → 读原始文件 → 提取契约
+                            subprocess.run(["git", "-C", str(repo_dir), "checkout", "--quiet", "--", "."],
+                                           check=False)
+                            with open(file_path, encoding="utf-8") as _f:
+                                orig_full = _f.read()
+                            contract = snakes._extract_contract(orig_full, function, class_name)
+                            # 安全降级: 目标函数在文件中不存在 (locator 候选名不准) → 跳过重写
+                            if not contract.get("signature"):
+                                rewrite_info["skipped"] = "function_not_found"
+                                attempt["rewrite"] = rewrite_info
+                            else:
+                                head_analysis = (cand.get("reason", "") or problem)[:800]
+                                rewrite = snakes._run_blackbox_rewrite(
+                                    contract, problem, head_analysis,
+                                    test_code="")
+                                rewrite_info["tokens"] = rewrite.get("total_tokens", 0)
+                                # 鲁棒提取: 容忍 ```python 后无换行 / ```Python / 前后空白
+                                rw_match = re.search(r'```\s*python\s*\n?(.*?)```',
+                                                     rewrite["content"], re.DOTALL | re.IGNORECASE)
+                                if not rw_match:
+                                    # 兜底: 无代码块标记时, 视整个 content 为代码
+                                    rewrite_info["no_marker"] = True
+                                    rw_match = re.match(r'\s*(.*?)\s*$',
+                                                        rewrite["content"], re.DOTALL)
+                                if rw_match:
+                                    rewritten_code = rw_match.group(1)
+                                    # 类方法: 剥掉 import/class 行 (与 fix() 内 :1139-1146 一致)
+                                    if class_name:
+                                        cleaned = []
+                                        for line in rewritten_code.split("\n"):
+                                            s = line.strip()
+                                            if (s.startswith(("import ", "from ")) or s.startswith("class ")):
+                                                continue
+                                            cleaned.append(line)
+                                        rewritten_code = "\n".join(cleaned).strip("\n")
+                                    # 提取目标函数原始切片 (供 _audit 行数差比较, 传整个文件会误判范围溢出)
+                                    target_slice = _extract_function_slice(orig_full, function, class_name)
+                                    # L1 审计重写产物
+                                    audit_rw = snakes._audit(target_slice, rewritten_code, function)
+                                    rewrite_info["audit_passed"] = audit_rw["passed"]
+                                    rewrite_info["audit_issues"] = audit_rw["issues"]
+                                    if audit_rw["passed"]:
+                                        # 生成 原始→重写 patch 并应用
+                                        apply_patch(repo_dir, inst["test_patch"])
+                                        rw_patch = snakes._generate_patch(
+                                            str(file_path), orig_full,
+                                            _replace_for_rewrite(orig_full, rewritten_code,
+                                                                 function, class_name))
+                                        if apply_patch(repo_dir, rw_patch):
+                                            after_ftp = run_tests(python, repo_dir, fail_to_pass)
+                                            ftp_pass = all(v == "PASS" for v in after_ftp.values())
+                                            rewrite_info["ftp_after"] = after_ftp
+                                            if ftp_pass:
+                                                after_ptp = run_tests(python, repo_dir, pass_to_pass)
+                                                ptp_pass = all(v == "PASS" for v in after_ptp.values())
+                                                attempt["pass_to_pass"] = after_ptp
+                                                if ptp_pass:
+                                                    rewrite_info["resolved"] = True
+                                                    record["resolved"] = True
+                                                    attempt["fix_success"] = True
+                                                    attempt["tokens"] = dict(attempt.get("tokens", {}),
+                                                                             **{"rewrite": rewrite_info.get("tokens", 0)})
+                                                    attempt["iterations"] = iterations
+                                                    attempt["rewrite_rescued"] = True
+                                                    record["attempts"].append(attempt)
+                                                    break
+                                            # 重写后仍失败: 回滚, 记录, 走正常迭代收尾
+                                            subprocess.run(["git", "-C", str(repo_dir), "checkout", "--quiet", "--", "."],
+                                                           check=False)
+                                attempt["rewrite"] = rewrite_info
+                        except Exception as e:
+                            attempt["rewrite"] = {**rewrite_info, "error": str(e)[:200]}
                     if it == 2:
                         break
 

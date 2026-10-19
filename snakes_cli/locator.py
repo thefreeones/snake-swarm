@@ -341,16 +341,21 @@ def locate(api_key: str, base_url: str, model: str,
     content = _call_llm(api_key, base_url, model, prompt, max_retries)
     candidates = _parse_candidates(content)
 
-    # P0-3 符号检索兜底: 无 traceback 或 LLM 空候选时, 从 issue 提取符号匹配索引
-    if not tb or not candidates:
+    # P0-3 符号检索兜底: 无 traceback 且 LLM 空候选时, 从 issue 提取符号匹配索引
+    # (2026-08-22 P0-4 修正: 符号候选质量低(噪声), 排到 LLM 候选之后只作兜底,
+    #  避免 Proxy.infer 类无关符号占据候选名额导致 LLM 候选无法尝试)
+    if not candidates:
         sym = _symbol_matches(issue, index)
         if sym:
-            merged_sym = list(sym)
+            candidates = sym[:4]
+    elif not tb:
+        sym = _symbol_matches(issue, index)
+        if sym:
             for c in candidates:
                 key = (c.get("file", ""), c.get("function", ""), c.get("class_name", ""))
-                if key not in {(x["file"], x["function"], x["class_name"]) for x in merged_sym}:
-                    merged_sym.append(c)
-            candidates = merged_sym[:4]
+                if key not in {(x["file"], x["function"], x["class_name"]) for x in sym}:
+                    sym.append(c)
+            candidates = candidates[:4]  # LLM 候选优先, 符号不挤占
 
     # 阶段2: 对 top 候选文件渲染方法体预览, 精确定位 (结果与阶段1合并)
     if candidates:
