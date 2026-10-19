@@ -1,0 +1,2522 @@
+{
+  "pattern_0001": {
+    "pattern_id": "pattern_0001",
+    "source_tasks": [
+      "fields.py:_bind_to_schema"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "字段绑定"
+    ],
+    "trigger_condition": "字段作为List或Tuple内部字段时，_bind_to_schema访问schema.opts失败",
+    "lesson": "字段绑定方法中勿用传入的schema参数获取opts，应使用self.root访问根schema的opts。",
+    "fix_strategy": "将getattr(schema.opts, ...)改为getattr(self.root.opts, ...)",
+    "evidence": [
+      "修复方案成功解决DateTime作为List内部字段的问题"
+    ],
+    "success_count": 37,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-22 02:54",
+    "status": "deprecated"
+  },
+  "pattern_0002": {
+    "pattern_id": "pattern_0002",
+    "source_tasks": [
+      "fields.py:_bind_to_schema"
+    ],
+    "domain": [
+      "marshmallow",
+      "字段绑定",
+      "Python"
+    ],
+    "trigger_condition": "容器字段递归绑定内层字段时，schema参数变为父字段而非Schema实例",
+    "lesson": "不要假设schema参数是Schema实例；访问配置应通过self.root而不是schema。",
+    "fix_strategy": "在字段的_bind_to_schema等需要读取Schema配置的方法中，改用self.root.opts获取根Schema选项，避免直接使用可能为父字段的schema参数。",
+    "evidence": [
+      "修复后fields.List(fields.DateTime())可正常实例化",
+      "DateTime字段通过self.root.opts正确读取配置，不再触发AttributeError"
+    ],
+    "success_count": 25,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-22 02:54",
+    "status": "deprecated"
+  },
+  "pattern_0003": {
+    "pattern_id": "pattern_0003",
+    "source_tasks": [
+      "fields.py:_bind_to_schema"
+    ],
+    "domain": [
+      "Python",
+      "AttributeError"
+    ],
+    "trigger_condition": "父级字段非Schema却被当作schema取opts属性",
+    "lesson": "安全访问可选属性，使用getattr避免假设父对象有opts",
+    "fix_strategy": "使用嵌套getattr获取opts与属性，提供默认值兜底",
+    "evidence": [
+      "修复后DateTime作为List/Tuple内部字段正常工作"
+    ],
+    "success_count": 40,
+    "failure_count": 2,
+    "confidence": 0.6499999999999999,
+    "last_used_at": "2026-08-22 03:09",
+    "status": "deprecated"
+  },
+  "pattern_0004": {
+    "pattern_id": "pattern_0004",
+    "source_tasks": [
+      "fields.py:_bind_to_schema"
+    ],
+    "domain": [
+      "marshmallow",
+      "Python",
+      "字段绑定",
+      "容器字段"
+    ],
+    "trigger_condition": "_bind_to_schema中需访问Schema配置，但schema参数可能是容器字段时",
+    "lesson": "不要假设_bind_to_schema的schema参数是Schema实例；容器字段会传自身，应通过self.root获取根Schema。",
+    "fix_strategy": "用self.root替代schema访问opts，如getattr(getattr(self.root, 'opts', None), 'dateformat', None)，避免AttributeError。",
+    "evidence": [
+      "该修复解决了DateTime作为List/Tuple内部字段时抛AttributeError的问题",
+      "在3.0.0rc9后DateTime在List/Tuple中正常工作"
+    ],
+    "success_count": 27,
+    "failure_count": 2,
+    "confidence": 0.6499999999999999,
+    "last_used_at": "2026-08-22 03:09",
+    "status": "deprecated"
+  },
+  "pattern_0005": {
+    "pattern_id": "pattern_0005",
+    "source_tasks": [
+      "brain_builtin_inference.py:_infer_str_format_call"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "静态推断",
+      "异常安全"
+    ],
+    "trigger_condition": "str.format推断**kwargs缺键导致崩溃",
+    "lesson": "推断格式化调用时须捕获KeyError等异常并返回Uninferable。",
+    "fix_strategy": "在调用str.format推断时，用try-except包裹格式化执行，捕获KeyError/IndexError/ValueError，返回util.Uninferable；同时考虑**kwargs推断不完整的情况。",
+    "evidence": [
+      "修复后不再抛出AstroidError，pylint可正常继续分析",
+      "该模式适用于所有可能因参数缺失而失败的模板化推断"
+    ],
+    "success_count": 12,
+    "failure_count": 2,
+    "confidence": 0.6499999999999999,
+    "last_used_at": "2026-08-21 02:18",
+    "status": "deprecated"
+  },
+  "pattern_0006": {
+    "pattern_id": "pattern_0006",
+    "source_tasks": [
+      "fields.py:_bind_to_schema"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "容器字段绑定"
+    ],
+    "trigger_condition": "内层字段绑定到容器字段时访问schema.opts",
+    "lesson": "不要假设_bind_to_schema的schema参数是Schema实例，可能传入字段对象，应使用self.root",
+    "fix_strategy": "在_bind_to_schema中通过self.root访问真实Schema，使用getattr安全获取opts属性，避免直接访问schema.opts",
+    "evidence": "采用self.root和getattr后，List(DateTime())和Tuple(DateTime())不再报AttributeError",
+    "success_count": 13,
+    "failure_count": 2,
+    "confidence": 0.6499999999999999,
+    "last_used_at": "2026-08-22 03:09",
+    "status": "deprecated"
+  },
+  "pattern_0007": {
+    "pattern_id": "pattern_0007",
+    "source_tasks": [
+      "brain_builtin_inference.py:_infer_str_format_call"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "str.format推断"
+    ],
+    "trigger_condition": "推断含**kwargs的str.format调用时",
+    "lesson": "不能假定推断出的kwargs完整；需先验证所有值为Const",
+    "fix_strategy": "在_format调用前检查每个关键字参数推断值；若含非Const则返回Uninferable，并捕获KeyError回退",
+    "evidence": [
+      "原崩溃因kwargs缺失导致KeyError；补丁通过前置校验避免执行format"
+    ],
+    "success_count": 6,
+    "failure_count": 2,
+    "confidence": 0.6499999999999999,
+    "last_used_at": "2026-08-21 02:18",
+    "status": "deprecated"
+  },
+  "pattern_0008": {
+    "pattern_id": "pattern_0008",
+    "source_tasks": [
+      "fields.py:_bind_to_schema"
+    ],
+    "domain": [
+      "marshmallow",
+      "字段绑定/属性访问"
+    ],
+    "trigger_condition": "绑定字段时父对象可能是容器字段而非Schema，访问其opts属性失败",
+    "lesson": "不要假定父对象是Schema；访问可选属性前先用hasattr检查",
+    "fix_strategy": "在_bind_to_schema中，使用hasattr(schema,\"opts\")判断后再获取schema.opts中的配置；否则使用默认值。",
+    "evidence": [
+      "修复后fields.List(fields.DateTime())在3.0.0中可正常实例化，不再抛AttributeError"
+    ],
+    "success_count": 3,
+    "failure_count": 3,
+    "confidence": 0.2,
+    "last_used_at": "2026-08-21 13:09",
+    "status": "deprecated"
+  },
+  "pattern_0009": {
+    "pattern_id": "pattern_0009",
+    "source_tasks": [
+      "fields.py:_bind_to_schema"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "容器字段绑定"
+    ],
+    "trigger_condition": "内部字段绑定到容器字段时，父对象不是Schema但被当作Schema访问opts",
+    "lesson": "访问schema属性前需确认类型，容器字段应传递根schema而非自身",
+    "fix_strategy": "容器字段的_bind_to_schema中深拷贝inner并绑定到根schema，或安全处理非Schema父对象",
+    "evidence": [
+      "DateTime作为List内部字段在rc9后抛AttributeError，修复后正常"
+    ],
+    "success_count": 28,
+    "failure_count": 1,
+    "confidence": 0.95,
+    "last_used_at": "2026-08-29 17:29",
+    "status": "active"
+  },
+  "pattern_0010": {
+    "pattern_id": "pattern_0010",
+    "source_tasks": [
+      "fields.py:_bind_to_schema"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "嵌套字段绑定"
+    ],
+    "trigger_condition": "内嵌字段在_bind_to_schema中访问外部对象的opts属性",
+    "lesson": "绑定时的schema参数可能是容器字段，获取Schema配置应使用self.root",
+    "fix_strategy": "将getattr(schema.opts, ...)改为getattr(self.root.opts, ...)，或先检查schema是否真正为Schema实例",
+    "evidence": [
+      "DateTime作为List/Tuple内部字段时因schema无opts属性报错",
+      "改用self.root.opts后问题解决"
+    ],
+    "success_count": 8,
+    "failure_count": 2,
+    "confidence": 0.6499999999999999,
+    "last_used_at": "2026-08-22 03:01",
+    "status": "deprecated"
+  },
+  "pattern_0011": {
+    "pattern_id": "pattern_0011",
+    "source_tasks": [
+      "fields.py:_bind_to_schema"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "容器字段",
+      "属性安全访问"
+    ],
+    "trigger_condition": "字段绑定父对象可能是容器Field而非Schema时访问opts",
+    "lesson": "不要假设父对象是Schema；用getattr安全获取可选属性",
+    "fix_strategy": "将schema.opts改为getattr(schema, 'opts', None)，再通过getattr取SCHEMA_OPTS_VAR_NAME避免AttributeError",
+    "evidence": [
+      "修复DateTime作为List/Tuple内层字段时抛出的AttributeError",
+      "回归测试通过"
+    ],
+    "success_count": 22,
+    "failure_count": 2,
+    "confidence": 0.6499999999999999,
+    "last_used_at": "2026-08-22 03:01",
+    "status": "deprecated"
+  },
+  "pattern_0012": {
+    "pattern_id": "pattern_0012",
+    "source_tasks": [
+      "as_string.py:__call__"
+    ],
+    "domain": [
+      "python",
+      "visitor-pattern",
+      "astroid"
+    ],
+    "trigger_condition": "访问者模式动态分发缺少某节点类型处理方法时",
+    "lesson": "访客模式动态分发缺失方法会抛AttributeError，需在入口处对特殊节点做兜底处理",
+    "fix_strategy": "在visitor的__call__入口处，检测节点类型名，若缺少对应visit_方法则返回默认值或调用备用逻辑，避免进入accept动态分发",
+    "evidence": [
+      "AsStringVisitor.__call__中对Unknown返回'Unknown'避免了AttributeError"
+    ],
+    "success_count": 9,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-21 04:28",
+    "status": "deprecated"
+  },
+  "pattern_0013": {
+    "pattern_id": "pattern_0013",
+    "source_tasks": [
+      "node_ng.py:accept"
+    ],
+    "domain": [
+      "Python",
+      "访问者模式/动态分发"
+    ],
+    "trigger_condition": "动态分发方法时，visitor可能缺少对应节点类型的方法",
+    "lesson": "getattr查找方法时不要假设必存在，应提供默认回退机制",
+    "fix_strategy": "使用getattr并设置默认None，若为None则回退到visit_default或默认处理",
+    "evidence": [
+      "Unknown节点导致as_string崩溃，修复后通过visit_default回退避免AttributeError"
+    ],
+    "success_count": 16,
+    "failure_count": 0,
+    "confidence": 0.95,
+    "last_used_at": "2026-08-21 02:56",
+    "status": "active"
+  },
+  "pattern_0014": {
+    "pattern_id": "pattern_0014",
+    "source_tasks": [
+      "node_ng.py:infer"
+    ],
+    "domain": [
+      "Python",
+      "类型推断/astroid"
+    ],
+    "trigger_condition": "str.format 推断遇到 None 参数或格式不匹配时崩溃",
+    "lesson": "模拟格式化时需防御性处理 None 和不支持的类型，避免 TypeError 传播。",
+    "fix_strategy": "在 _infer_str_format_call 中先校验参数类型，对 None 或非字符串兼容值直接返回 Uninferable 或安全转换；同时捕获 ValueError/TypeError 以保证推断不崩溃。",
+    "evidence": [
+      "astroid 2.12.x 在 pylint 检查时因 None.__format__ 抛 TypeError",
+      "旧版本（2.9）未出现，说明是新增推断逻辑未覆盖边界值"
+    ],
+    "success_count": 3,
+    "failure_count": 2,
+    "confidence": 0.39999999999999997,
+    "last_used_at": "2026-08-21 05:03",
+    "status": "deprecated"
+  },
+  "pattern_0015": {
+    "pattern_id": "pattern_0015",
+    "source_tasks": [
+      "validate.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "正则表达式",
+      "输入验证",
+      "安全"
+    ],
+    "trigger_condition": "正则使用$匹配字符串结尾，需严格匹配整个字符串",
+    "lesson": "$在Python中匹配换行符前，导致尾随换行等被接受；应使用\\Z或fullmatch",
+    "fix_strategy": "将锚点$替换为\\Z，或改用re.fullmatch；同时审计其他正则是否同样误用$",
+    "evidence": [
+      "marshmallow validate.py中email验证修复",
+      "Stack Overflow指出$与\\Z区别"
+    ],
+    "success_count": 4,
+    "failure_count": 2,
+    "confidence": 0.49999999999999994,
+    "last_used_at": "2026-08-21 05:03",
+    "status": "deprecated"
+  },
+  "pattern_0016": {
+    "pattern_id": "pattern_0016",
+    "source_tasks": [
+      "fields.py:_bind_to_schema"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "字段绑定",
+      "嵌套容器字段"
+    ],
+    "trigger_condition": "嵌套字段绑定时访问schema.opts但schema是父字段实例",
+    "lesson": "绑定字段时勿假定schema参数是Schema,嵌套容器传入的是字段;用self.root取根Schema",
+    "fix_strategy": "在_bind_to_schema中先调用super()设置self.root,再用self.root.opts替代schema.opts访问选项",
+    "evidence": [
+      "DateTime作为List/Tuple内部字段时AttributeError: 'List' object has no attribute 'opts'",
+      "改为self.root.opts后修复该错误"
+    ],
+    "success_count": 22,
+    "failure_count": 2,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-29 06:56",
+    "status": "deprecated"
+  },
+  "pattern_0017": {
+    "pattern_id": "pattern_0017",
+    "source_tasks": [
+      "fields.py:_bind_to_schema"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow/序列化框架"
+    ],
+    "trigger_condition": "inner field's _bind_to_schema receives container field as schema",
+    "lesson": "不应假设参数一定是 Schema，直接访问属性可能引发 AttributeError",
+    "fix_strategy": "用 getattr(schema, 'opts', None) 或从 self.root 安全获取，避免直接访问",
+    "evidence": [
+      "DateTime 作为 List 内部字段时 List._bind_to_schema 传入自身导致 schema.opts 报错，修复后通过 getattr/root 解决"
+    ],
+    "success_count": 5,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-21 12:53",
+    "status": "deprecated"
+  },
+  "pattern_0018": {
+    "pattern_id": "pattern_0018",
+    "source_tasks": [
+      "_ast.py:parse"
+    ],
+    "domain": [
+      "Python",
+      "astroid/inference",
+      "str.format",
+      "异常处理"
+    ],
+    "trigger_condition": "str.format模板求值中属性访问失败",
+    "lesson": "推断格式化字符串时不要假设属性存在，需捕获AttributeError并转为类型错误",
+    "fix_strategy": "在str.format推断逻辑中，对属性求值使用try/except AttributeError，捕获后抛AstroidTypeError或返回Uninferable，避免未处理异常",
+    "evidence": [
+      "Bug报告期望抛AstroidTypeError而非AttributeError",
+      "现有代码在brain_builtin_inference.py第956行未捕获属性访问异常"
+    ],
+    "success_count": 4,
+    "failure_count": 4,
+    "confidence": 0.2,
+    "last_used_at": "2026-08-21 19:35",
+    "status": "deprecated"
+  },
+  "pattern_0019": {
+    "pattern_id": "pattern_0019",
+    "source_tasks": [
+      "bases.py:getattr"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "类型推断"
+    ],
+    "trigger_condition": "实例属性存在时，getattr仍拼接类级同名属性导致误判",
+    "lesson": "实例属性应优先且独立，类级属性不应无条件混入结果",
+    "fix_strategy": "当实例属性命中时，在无上下文或无需回退时直接返回实例属性；仅在确实需要类级成员补充时才合并，并保持顺序与上下文过滤",
+    "evidence": [
+      "在import typing后，ex.prev()和ex.next()出现false-positive not-callable",
+      "bisect定位到78d5537，修复后回归通过"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0020": {
+    "pattern_id": "pattern_0020",
+    "source_tasks": [
+      "fields.py:_deserialize"
+    ],
+    "domain": [
+      "Python",
+      "日期时间解析"
+    ],
+    "trigger_condition": "ISO8601日期时间以'Z'结尾且未安装python-dateutil时解析失败",
+    "lesson": "strptime不识别'Z'表示UTC，解析前需转换或使用兼容解析器",
+    "fix_strategy": "将末尾'Z'替换为'+00:00'后再用strptime，或改用datetime.fromisoformat等支持ISO标准的解析函数",
+    "evidence": [
+      "marshmallow 2.19.4加载'2019-06-17T00:57:41.000Z'报错，2.19.3正常；安装python-dateutil后正常"
+    ],
+    "success_count": 7,
+    "failure_count": 3,
+    "confidence": 0.5999999999999999,
+    "last_used_at": "2026-08-21 22:48",
+    "status": "deprecated"
+  },
+  "pattern_0021": {
+    "pattern_id": "pattern_0021",
+    "source_tasks": [
+      "as_string.py:__init__"
+    ],
+    "domain": [
+      "Python",
+      "初始化/构造函数"
+    ],
+    "trigger_condition": "初始化方法有必选参数且可能传入None",
+    "lesson": "__init__参数应设默认值，并显式处理None，避免后续拼接报错。",
+    "fix_strategy": "为关键参数提供安全默认值，如indent='    '，并转换None为默认值。",
+    "evidence": [
+      "修复AsStringVisitor.__init__：def __init__(self, indent='    '): self.indent = indent if indent is not None else '    '"
+    ],
+    "success_count": 6,
+    "failure_count": 1,
+    "confidence": 0.8999999999999999,
+    "last_used_at": "2026-08-28 20:21",
+    "status": "active"
+  },
+  "pattern_0022": {
+    "pattern_id": "pattern_0022",
+    "source_tasks": [
+      "builder.py:parse"
+    ],
+    "domain": [
+      "astroid",
+      "类型推断"
+    ],
+    "trigger_condition": "推断过程中属性访问失败抛AttributeError未被捕获",
+    "lesson": "brain代码中访问属性需捕获AttributeError并转为AstroidTypeError，避免内部错误泄露",
+    "fix_strategy": "在属性访问处包裹try/except AttributeError，并在except中raise AstroidTypeError作为格式化无效的类型错误",
+    "evidence": [
+      "修复后解析含str.format访问不存在属性的代码不再抛出未处理的AttributeError"
+    ],
+    "success_count": 7,
+    "failure_count": 4,
+    "confidence": 0.49999999999999994,
+    "last_used_at": "2026-08-21 22:48",
+    "status": "deprecated"
+  },
+  "pattern_0023": {
+    "pattern_id": "pattern_0023",
+    "source_tasks": [
+      "fields.py:_deserialize"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "类型校验"
+    ],
+    "trigger_condition": "嵌套字段输入值非映射类型时",
+    "lesson": "字段反序列化时应先校验输入类型，避免下游在None或错误类型上操作",
+    "fix_strategy": "在_deserialize中，many=False时检查输入是否为Mapping，否则调用self.fail('type')",
+    "evidence": [
+      "修复后Nested传入字符串不再触发TypeError，而是返回校验错误"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0024": {
+    "pattern_id": "pattern_0024",
+    "source_tasks": [
+      "raw_building.py:_build_from_function"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "异常处理"
+    ],
+    "trigger_condition": "深度探测模块/类属性时，getattr触发FutureWarning等未捕获异常",
+    "lesson": "except需捕获FutureWarning；更深层中应捕获所有Warning避免警告升级",
+    "fix_strategy": "将object_build循环中的except (AttributeError, DeprecationWarning)扩展为except (AttributeError, DeprecationWarning, FutureWarning)，或改为except Exception并单独处理",
+    "evidence": [
+      "Bug复现：pandas.__getattr__发出FutureWarning导致AstroidError；fix方案在astroid PR 1719中验证通过"
+    ],
+    "success_count": 14,
+    "failure_count": 2,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-22 03:25",
+    "status": "deprecated"
+  },
+  "pattern_0025": {
+    "pattern_id": "pattern_0025",
+    "source_tasks": [
+      "node_ng.py:accept"
+    ],
+    "domain": [
+      "Python",
+      "visitor模式/动态分发"
+    ],
+    "trigger_condition": "visitor模式中getattr动态查找visit_方法时遇到未实现的方法",
+    "lesson": "不要用裸getattr，需提供默认方法或fallback，避免AttributeError",
+    "fix_strategy": "修改accept()，使用getattr(visitor, 'visit_...', None)，若为None则调用通用visit_default或返回空值",
+    "evidence": [
+      "astroid的Unknown().as_string()修复"
+    ],
+    "success_count": 23,
+    "failure_count": 2,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-22 01:06",
+    "status": "deprecated"
+  },
+  "pattern_0026": {
+    "pattern_id": "pattern_0026",
+    "source_tasks": [
+      "node_ng.py:as_string"
+    ],
+    "domain": [
+      "Python",
+      "访问者模式/astroid"
+    ],
+    "trigger_condition": "访问者缺少某节点类型的 visit_* 方法时",
+    "lesson": "访问者分发不能假设所有类型都有对应方法，需提供回退逻辑",
+    "fix_strategy": "在 accept 或调用前用 hasattr 检查，缺失时回退到默认处理（如 str(node)）而非直接 getattr 抛错",
+    "evidence": [
+      "Unknown().as_string() 因 AsStringVisitor 无 visit_unknown 而抛 AttributeError",
+      "修复后使用 hasattr 回退到 str 成功处理"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0027": {
+    "pattern_id": "pattern_0027",
+    "source_tasks": [
+      "builder.py:parse"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "AST节点属性一致性"
+    ],
+    "trigger_condition": "类缺少基类/其他节点拥有的公共属性，导致属性访问抛AttributeError",
+    "lesson": "所有AST节点应统一初始化公共属性（如end_lineno），避免部分节点缺失",
+    "fix_strategy": "在Module类的构造函数中显式初始化缺失属性为None，或确保基类NodeNG统一设置，并补充测试",
+    "evidence": [
+      "Module实例访问end_lineno时抛AttributeError，其他节点正常，修复后应能返回None"
+    ],
+    "success_count": 13,
+    "failure_count": 2,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-22 01:06",
+    "status": "deprecated"
+  },
+  "pattern_0028": {
+    "pattern_id": "pattern_0028",
+    "source_tasks": [
+      "builder.py:_post_build"
+    ],
+    "domain": [
+      "python",
+      "ast/astroid",
+      "属性一致性"
+    ],
+    "trigger_condition": "AST节点类缺少公共定位属性，访问时抛AttributeError",
+    "lesson": "所有节点应统一初始化公共属性，避免部分节点缺失导致属性访问崩溃",
+    "fix_strategy": "在构建完成后统一检查并补设缺失属性（如end_lineno/end_col_offset），赋默认值None",
+    "evidence": [
+      "修复后module.end_lineno和end_col_offset可安全访问且返回None"
+    ],
+    "success_count": 12,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-22 01:10",
+    "status": "deprecated"
+  },
+  "pattern_0029": {
+    "pattern_id": "pattern_0029",
+    "source_tasks": [
+      "validate.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "正则验证"
+    ],
+    "trigger_condition": "正则验证字符串时使用$锚点，导致末尾换行被接受",
+    "lesson": "在Python正则中$可匹配末尾换行前，应使用\\Z确保完整匹配",
+    "fix_strategy": "将所有验证正则中的$替换为\\Z；或在验证前检查输入是否包含\\n并直接拒绝",
+    "evidence": [
+      "Email验证器接受email@domain.com\\n等非法输入",
+      "修改后拒绝包含换行符的输入"
+    ],
+    "success_count": 5,
+    "failure_count": 2,
+    "confidence": 0.5999999999999999,
+    "last_used_at": "2026-08-22 02:33",
+    "status": "deprecated"
+  },
+  "pattern_0030": {
+    "pattern_id": "pattern_0030",
+    "source_tasks": [
+      "validate.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "正则表达式",
+      "输入校验"
+    ],
+    "trigger_condition": "正则校验字符串且允许末尾换行，使用$误匹配",
+    "lesson": "Python正则$会匹配末尾换行前，导致非法输入通过，应使用\\Z",
+    "fix_strategy": "将字符串锚点由$替换为\\Z；并全面排查同类正则",
+    "evidence": [
+      "Email和URL校验使用$时接受\\n结尾，改用\\Z后拒绝"
+    ],
+    "success_count": 5,
+    "failure_count": 2,
+    "confidence": 0.5999999999999999,
+    "last_used_at": "2026-08-22 02:33",
+    "status": "deprecated"
+  },
+  "pattern_0031": {
+    "pattern_id": "pattern_0031",
+    "source_tasks": [
+      "validate.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "正则表达式",
+      "输入验证"
+    ],
+    "trigger_condition": "正则锚点用$匹配字符串末尾，校验值含换行时绕过",
+    "lesson": "Python中$可匹配末尾换行前，须改用\\Z严格匹配字符串结尾",
+    "fix_strategy": "将正则中的$替换为\\Z；同时检查同类验证器的所有正则锚点，补充含换行符的边界测试",
+    "evidence": [
+      "niceandsimple\\n@example.com 应被拒绝",
+      "NiCeAnDsImPlE@eXaMpLe.CoM\\n 应被拒绝"
+    ],
+    "success_count": 5,
+    "failure_count": 2,
+    "confidence": 0.5999999999999999,
+    "last_used_at": "",
+    "status": "deprecated"
+  },
+  "pattern_0032": {
+    "pattern_id": "pattern_0032",
+    "source_tasks": [
+      "builder.py:module_build"
+    ],
+    "domain": [
+      "Python",
+      "C扩展模块属性访问"
+    ],
+    "trigger_condition": "检查扩展模块成员属性时可能触发底层C++异常",
+    "lesson": "对第三方C扩展模块成员做hasattr前需考虑属性访问可能抛异常",
+    "fix_strategy": "用try/except包裹属性检查，捕获底层RuntimeError等异常后按属性不存在处理，避免fatal crash",
+    "evidence": [
+      "astroid #1885 引发，v2.13.x 中 hasattr(member, \"__all__\") 导致崩溃，修复后不再报错"
+    ],
+    "success_count": 15,
+    "failure_count": 3,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-28 20:33",
+    "status": "deprecated"
+  },
+  "pattern_0033": {
+    "pattern_id": "pattern_0033",
+    "source_tasks": [
+      "bases.py:_infer_type_new_call"
+    ],
+    "domain": [
+      "astroid",
+      "类型推断"
+    ],
+    "trigger_condition": "处理type.__new__动态创建类时，属性值被过早infer",
+    "lesson": "不要对attrs的值提前infer，应保留原始节点以维持类型语义",
+    "fix_strategy": "修改_infer_type_new_call，移除对attrs.items()的key/value的infer，直接使用原始节点构建locals",
+    "evidence": [
+      "修复后Pylint不再报E1136 unsubscriptable-object"
+    ],
+    "success_count": 4,
+    "failure_count": 3,
+    "confidence": 0.2999999999999999,
+    "last_used_at": "2026-08-22 01:59",
+    "status": "deprecated"
+  },
+  "pattern_0034": {
+    "pattern_id": "pattern_0034",
+    "source_tasks": [
+      "bases.py:getitem"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "类型推断/上下文绑定"
+    ],
+    "trigger_condition": "推断函数创建了绑定上下文的new_context，却只在无外部上下文时使用",
+    "lesson": "绑定上下文的boundnode是下游约束判断的关键，不能因已有上下文而丢弃",
+    "fix_strategy": "将 `if not context: context = new_context` 改为无条件 `context = new_context`，确保推断始终基于绑定当前节点的上下文",
+    "evidence": [
+      "修复后 `dog.identity[\"name\"]` 不再误报 unsubscriptable-object",
+      "保留了 PR #2239 引入的 Constraint 检查所需的 boundnode 信息"
+    ],
+    "success_count": 47,
+    "failure_count": 1,
+    "confidence": 0.95,
+    "last_used_at": "2026-08-31 05:49",
+    "status": "active"
+  },
+  "pattern_0035": {
+    "pattern_id": "pattern_0035",
+    "source_tasks": [
+      "raw_building.py:object_build"
+    ],
+    "domain": [
+      "Python",
+      "C扩展/内省异常处理"
+    ],
+    "trigger_condition": "对任意成员调用 hasattr/getattr 时，遇到 C 扩展对象可能抛非 AttributeError 异常",
+    "lesson": "不要假设属性访问只抛 AttributeError；hasattr 也不安全。需捕获更广泛的异常并容错跳过。",
+    "fix_strategy": "用 try/except 包裹属性访问，捕获 Exception（至少含 RuntimeError 和 AttributeError），异常时跳过该成员或视为无属性。",
+    "evidence": [
+      "修复 PyQt5 中 qApp 已删除导致的 RuntimeError 崩溃"
+    ],
+    "success_count": 7,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-22 02:41",
+    "status": "deprecated"
+  },
+  "pattern_0036": {
+    "pattern_id": "pattern_0036",
+    "source_tasks": [
+      "context.py:inferred"
+    ],
+    "domain": [
+      "Python",
+      "静态推断",
+      "str.format"
+    ],
+    "trigger_condition": "str.format() 调用时格式字符串来自变量而非字面量",
+    "lesson": "推断方法调用时需先推断接收者，提取常量值再应用语义，勿假定字面量",
+    "fix_strategy": "在推断 str.format() 时，解析调用对象的 inferred 结果；若为 Const 字符串，取其 value 并结合 args/kwargs 生成格式化结果",
+    "evidence": [
+      "astroid extract_node 对变量格式字符串的 format 调用推断为空字符串"
+    ],
+    "success_count": 57,
+    "failure_count": 2,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-29 06:29",
+    "status": "deprecated"
+  },
+  "pattern_0037": {
+    "pattern_id": "pattern_0037",
+    "source_tasks": [
+      "bases.py:infer"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "静态推断"
+    ],
+    "trigger_condition": "循环中对多个语句复用同一个InferenceContext对象",
+    "lesson": "推理上下文含可变状态，每个语句推断前必须克隆，否则污染后续结果",
+    "fix_strategy": "在for循环内、每次调用stmt.infer(context)前，从原始context克隆新副本再传入",
+    "evidence": [
+      "同一AssignName多次赋值后，后续infer失败返回Uninferable",
+      "改用不同变量名或内联后行为正常，定位为context复用问题",
+      "修复后恢复astroid 2.5的正确行为"
+    ],
+    "success_count": 25,
+    "failure_count": 2,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-29 13:39",
+    "status": "deprecated"
+  },
+  "pattern_0038": {
+    "pattern_id": "pattern_0038",
+    "source_tasks": [
+      "bases.py:infer"
+    ],
+    "domain": [
+      "python",
+      "astroid",
+      "inference/context-state"
+    ],
+    "trigger_condition": "多次推断使用同一上下文对象时",
+    "lesson": "复用可变上下文会污染状态；每次迭代应克隆上下文。",
+    "fix_strategy": "在遍历stmts前克隆InferenceContext，例如context = context.clone()，确保每个语句使用独立的上下文副本，避免循环检测误判。",
+    "evidence": [
+      "修复前infer_stmts返回[Const.int, Uninferable]",
+      "修复后返回[Const.int, Const.int]"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0039": {
+    "pattern_id": "pattern_0039",
+    "source_tasks": [
+      "scoped_nodes.py:_islots"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "MRO 推断"
+    ],
+    "trigger_condition": "typing_extensions.Protocol 与 Generic/ABC 组合导致 MRO 计算错误",
+    "lesson": "对象/类层次推断需区分运行时真实 MRO 与 astroid 静态推断，避免误报。",
+    "fix_strategy": "对 typing_extensions.Protocol 及其子类特殊处理：在 MRO 计算或 _islots 推断中将其视为真实 typing.Protocol，或跳过仅依赖抽象类的合并，确保与 CPython 行为一致。",
+    "evidence": [
+      "测试用例在 Python 3.7 上通过，astroid 不再抛出 InconsistentMroError"
+    ],
+    "success_count": 103,
+    "failure_count": 2,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-29 11:47",
+    "status": "deprecated"
+  },
+  "pattern_0040": {
+    "pattern_id": "pattern_0040",
+    "source_tasks": [
+      "fields.py:_bind_to_schema"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "字段绑定"
+    ],
+    "trigger_condition": "字段的_bind_to_schema中访问父对象opts属性",
+    "lesson": "父对象可能是容器字段而非Schema，需检查类型后用self.root回退",
+    "fix_strategy": "用isinstance(schema, SchemaABC)判断，否则使用self.root获取真正schema的opts",
+    "evidence": [
+      "DateTime作为List内字段时因直接访问list.opts抛AttributeError",
+      "修复后通过type检查+self.root安全获取schema选项"
+    ],
+    "success_count": 32,
+    "failure_count": 1,
+    "confidence": 0.95,
+    "last_used_at": "2026-08-31 01:18",
+    "status": "active"
+  },
+  "pattern_0041": {
+    "pattern_id": "pattern_0041",
+    "source_tasks": [
+      "bases.py:infer"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "状态污染/上下文隔离"
+    ],
+    "trigger_condition": "循环推断多个语句时共享同一个可变上下文对象",
+    "lesson": "共享上下文会在迭代间残留状态，污染后续推断；每次迭代应使用独立上下文副本",
+    "fix_strategy": "在循环体内为每个语句克隆新 InferenceContext，或在使用前清空上下文中的记录容器，避免前序语句的推断痕迹影响后续",
+    "evidence": [
+      "同一个 AssignName 被多次赋值时，第二次推断返回 Uninferable；改用独立上下文后能正确定位所有可能值"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0042": {
+    "pattern_id": "pattern_0042",
+    "source_tasks": [
+      "builder.py:parse"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "静态推断"
+    ],
+    "trigger_condition": "str.format调用推断时访问不存在的属性",
+    "lesson": "不应泄漏底层AttributeError，应转换为AstroidTypeError表示模板无效",
+    "fix_strategy": "在_infer_str_format_call中捕获AttributeError并抛出AstroidTypeError，提供更准确的错误信息",
+    "evidence": [
+      "Bug报告期望抛出AstroidTypeError而非未处理的AttributeError",
+      "与pycqa/pylint#7939相关"
+    ],
+    "success_count": 72,
+    "failure_count": 2,
+    "confidence": 0.6499999999999999,
+    "last_used_at": "2026-08-29 01:54",
+    "status": "deprecated"
+  },
+  "pattern_0043": {
+    "pattern_id": "pattern_0043",
+    "source_tasks": [
+      "raw_building.py:inspect_build"
+    ],
+    "domain": [
+      "Python",
+      "异常处理/反射构建"
+    ],
+    "trigger_condition": "反射遍历属性时将警告升级为异常，捕获类型过窄",
+    "lesson": "warnings.simplefilter(\"error\") 升级的是 Warning 基类，捕获必须匹配基类或其所有子类",
+    "fix_strategy": "将 except 子句从 (AttributeError, DeprecationWarning) 扩展为捕获 Warning (或至少 FutureWarning) 并做相应处理，避免未处理警告冒泡为 AstroidError",
+    "evidence": [
+      "修复后 pandas 的 FutureWarning 被捕获并降级为 dummy node，standalone repro 不再抛错"
+    ],
+    "success_count": 26,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 08:34",
+    "status": "deprecated"
+  },
+  "pattern_0044": {
+    "pattern_id": "pattern_0044",
+    "source_tasks": [
+      "as_string.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "visitor pattern",
+      "astroid"
+    ],
+    "trigger_condition": "访问器遇到未实现visit_方法的节点类型时动态分发失败",
+    "lesson": "访问器应显式处理未支持节点类型，避免AttributeError",
+    "fix_strategy": "在访问器入口处检查特定节点类型，返回默认值或抛出清晰异常，而不是依赖动态分发",
+    "evidence": [
+      "AsStringVisitor.__call__ 增加对 Unknown 节点的特殊分支，返回 \"Unknown\"，修复了 AttributeError"
+    ],
+    "success_count": 30,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 01:42",
+    "status": "deprecated"
+  },
+  "pattern_0045": {
+    "pattern_id": "pattern_0045",
+    "source_tasks": [
+      "as_string.py:__call__"
+    ],
+    "domain": [
+      "astroid",
+      "visitor模式"
+    ],
+    "trigger_condition": "visitor动态查找visit_方法但节点类型缺失对应方法时",
+    "lesson": "动态分派需覆盖所有节点类型，否则AttributeError；可在入口特判处理",
+    "fix_strategy": "在visitor的__call__中检查节点类型，对缺失类型返回合理默认值，或直接添加visit_unknown方法",
+    "evidence": [
+      "修复后astroid.nodes.Unknown().as_string()返回'Unknown'"
+    ],
+    "success_count": 24,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 01:57",
+    "status": "deprecated"
+  },
+  "pattern_0046": {
+    "pattern_id": "pattern_0046",
+    "source_tasks": [
+      "as_string.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "Visitor模式",
+      "动态分发"
+    ],
+    "trigger_condition": "Visitor模式动态分发时遇未知节点类型抛AttributeError",
+    "lesson": "Visitor动态分发依赖方法名拼接，缺少方法时不应直接失败，需提供兜底处理",
+    "fix_strategy": "在__call__中先getattr(visitor, 'visit_' + class_name.lower(), None)，为None时返回安全默认值如'Unknown'，否则再调用node.accept(self)处理",
+    "evidence": [
+      "astroid AsStringVisitor对Unknown节点调用as_string()报AttributeError",
+      "修复后返回'Unknown'字符串，不再崩溃"
+    ],
+    "success_count": 16,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "",
+    "status": "deprecated"
+  },
+  "pattern_0047": {
+    "pattern_id": "pattern_0047",
+    "source_tasks": [
+      "builder.py:parse"
+    ],
+    "domain": [
+      "Python",
+      "类继承初始化"
+    ],
+    "trigger_condition": "子类重写__init__但未调用super().__init__，导致父类属性缺失",
+    "lesson": "重写子类__init__必须调用super().__init__()，否则父类初始化逻辑被跳过",
+    "fix_strategy": "检查所有重写__init__的节点类，确保每个都调用super().__init__()，并添加测试验证属性存在",
+    "evidence": [
+      "Module.__init__添加super().__init__()后，module.end_lineno和module.end_col_offset不再抛出AttributeError",
+      "其他节点因正确调用super().__init__()而正常获得end_lineno/end_col_offset属性"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0048": {
+    "pattern_id": "pattern_0048",
+    "source_tasks": [
+      "validate.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "正则表达式",
+      "输入验证"
+    ],
+    "trigger_condition": "正则验证字符串末尾时误用$匹配换行符",
+    "lesson": "Python正则中$会匹配末尾换行前，应改用\\Z确保字符串真正结束",
+    "fix_strategy": "将所有验证正则末尾的$替换为\\Z，并全面检查其他正则",
+    "evidence": [
+      "修复后Email不再误接受含换行符的地址"
+    ],
+    "success_count": 34,
+    "failure_count": 0,
+    "confidence": 0.95,
+    "last_used_at": "2026-08-31 05:03",
+    "status": "active"
+  },
+  "pattern_0049": {
+    "pattern_id": "pattern_0049",
+    "source_tasks": [
+      "validate.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "输入验证"
+    ],
+    "trigger_condition": "正则验证器使用$锚定字符串末尾，需严格匹配时",
+    "lesson": "Python正则中$匹配换行符前位置，\\Z才匹配真正末尾，避免错误通过",
+    "fix_strategy": "全局搜索正则中的$，替换为\\Z，并补充末尾换行测试用例",
+    "evidence": [
+      "marshmallow Email验证器修复",
+      "Stack Overflow a/48730645"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0050": {
+    "pattern_id": "pattern_0050",
+    "source_tasks": [
+      "raw_building.py:object_build"
+    ],
+    "domain": [
+      "Python",
+      "属性检查/异常处理"
+    ],
+    "trigger_condition": "用hasattr检查第三方库对象属性时抛出RuntimeError等异常",
+    "lesson": "hasattr只捕获AttributeError，对C扩展可能崩溃，需处理非预期异常",
+    "fix_strategy": "定义safe_hasattr：用try/except捕获Exception（或至少捕获RuntimeError），并在except中返回False或安全处理",
+    "evidence": [
+      "修复PyQt5 QApplication被删除导致hasattr崩溃的问题"
+    ],
+    "success_count": 18,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 01:57",
+    "status": "deprecated"
+  },
+  "pattern_0051": {
+    "pattern_id": "pattern_0051",
+    "source_tasks": [
+      "bases.py:_infer_type_new_call"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "类型推断"
+    ],
+    "trigger_condition": "推断 type.__new__ 创建动态类时，基类信息未用推断值",
+    "lesson": "构造新对象必须使用推断后的值，而非原始未推断节点",
+    "fix_strategy": "在 _infer_type_new_call 中，将 inferred_bases 传给 ClassDef.postinit()，替代 bases.elts",
+    "evidence": [
+      "修复后 dog.identity 不再报 unsubscriptable-object，可正确索引"
+    ],
+    "success_count": 3,
+    "failure_count": 2,
+    "confidence": 0.39999999999999997,
+    "last_used_at": "2026-08-29 12:01",
+    "status": "deprecated"
+  },
+  "pattern_0052": {
+    "pattern_id": "pattern_0052",
+    "source_tasks": [
+      "bases.py:_infer_type_new_call"
+    ],
+    "domain": [
+      "python",
+      "astroid",
+      "类型推断"
+    ],
+    "trigger_condition": "推断type.__new__调用且泛型基类含TypeVar参数时",
+    "lesson": "容易丢失TypeVar的bound信息，导致错误判断可下标性",
+    "fix_strategy": "在_infer_type_new_call中解析TypeVar时，保持其bound的method/属性",
+    "evidence": [
+      "Astroid 2.15.7回归，Pylint报unsubscriptable-object，修复后正确解析"
+    ],
+    "success_count": 8,
+    "failure_count": 2,
+    "confidence": 0.8999999999999999,
+    "last_used_at": "2026-08-29 12:32",
+    "status": "active"
+  },
+  "pattern_0053": {
+    "pattern_id": "pattern_0053",
+    "source_tasks": [
+      "raw_building.py:object_build"
+    ],
+    "domain": [
+      "Python",
+      "C扩展/动态模块",
+      "AST构建/introspection"
+    ],
+    "trigger_condition": "C扩展对象在inspect_build的hasattr/getattr时抛出非AttributeError异常",
+    "lesson": "hasattr只捕获AttributeError，C扩展可能抛RuntimeError，需额外捕获或使用更安全属性访问",
+    "fix_strategy": "在object_build中对属性访问和hasattr调用包裹try/except，捕获RuntimeError（或更宽的Exception）并跳过这些成员，避免崩溃；可考虑用inspect.getattr_static减少副作用",
+    "evidence": [
+      "astroid 2.13.x回归，PyQt5 QtWidgets.qApp在Pylint中触发RuntimeError，bisect到#1885",
+      "修复后object_build不再让该异常逃逸，pylint能正常解析PyQt5"
+    ],
+    "success_count": 13,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 01:42",
+    "status": "deprecated"
+  },
+  "pattern_0054": {
+    "pattern_id": "pattern_0054",
+    "source_tasks": [
+      "raw_building.py:object_build"
+    ],
+    "domain": [
+      "Python",
+      "内省/静态分析"
+    ],
+    "trigger_condition": "内省C扩展对象时，hasattr/getattr抛出非AttributeError异常",
+    "lesson": "属性访问异常不可只捕获AttributeError，需捕获更宽异常避免崩溃",
+    "fix_strategy": "将except AttributeError改为except Exception，或对hasattr调用额外包装try/except并安全跳过",
+    "evidence": [
+      "PyQt5 QtWidgets.qApp访问已删除QApplication触发RuntimeError",
+      "bisect定位到commit 974f26f75eb3eccb4bcd8ea143901baf60a685ff"
+    ],
+    "success_count": 8,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 01:57",
+    "status": "deprecated"
+  },
+  "pattern_0055": {
+    "pattern_id": "pattern_0055",
+    "source_tasks": [
+      "fields.py:__init__"
+    ],
+    "domain": [
+      "Python",
+      "API设计"
+    ],
+    "trigger_condition": "函数使用**kwargs收集参数，又需处理同名显式键",
+    "lesson": "避免用**kwargs捕获本应显式声明的参数，会造成键冲突与语义混淆",
+    "fix_strategy": "将通配的**kwargs改为显式命名参数，若需兼容老用法可先pop再合并",
+    "evidence": [
+      "修复后self.metadata正确存储用户提供的metadata字典，而非被包裹为{'metadata': ...}"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0056": {
+    "pattern_id": "pattern_0056",
+    "source_tasks": [
+      "fields.py:_bind_to_schema"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "字段绑定"
+    ],
+    "trigger_condition": "字段作为List/Tuple等容器内层字段绑定时",
+    "lesson": "不要假定_bind_to_schema的参数是Schema，可能是容器字段",
+    "fix_strategy": "使用self.root获取根schema，先判空再访问其opts",
+    "evidence": [
+      "修复后DateTime等字段在List内正常绑定",
+      "相关测试通过"
+    ],
+    "success_count": 4,
+    "failure_count": 0,
+    "confidence": 0.8999999999999999,
+    "last_used_at": "2026-08-31 01:18",
+    "status": "active"
+  },
+  "pattern_0057": {
+    "pattern_id": "pattern_0057",
+    "source_tasks": [
+      "bases.py:_infer_stmts"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "inference"
+    ],
+    "trigger_condition": "循环内多次调用 infer 且共享同一 context 实例",
+    "lesson": "不可复用同一 context 进行多次独立推断；每次迭代应使用 clone 隔离状态",
+    "fix_strategy": "在循环体内为每个 stmt 创建 context.copy() 或 clone()，避免内部状态污染后续推断",
+    "evidence": [
+      "修复后同一 AssignName 的多次使用能正确推断出所有可能值"
+    ],
+    "success_count": 0,
+    "failure_count": 1,
+    "confidence": 0.3,
+    "last_used_at": "2026-08-29 13:39",
+    "status": "candidate"
+  },
+  "pattern_0058": {
+    "pattern_id": "pattern_0058",
+    "source_tasks": [
+      "inference.py:infer_name"
+    ],
+    "domain": [
+      "Python",
+      "静态分析/类型推断"
+    ],
+    "trigger_condition": "同一变量多次赋值需逐个推断时，共享推理上下文导致路径污染",
+    "lesson": "多个语句共用一个推断上下文会污染循环检测路径，导致后续语句误判为不可推断",
+    "fix_strategy": "在遍历每个语句进行推断时，为每个语句创建独立的上下文（如复制或新建InferenceContext），避免上下文路径在语句间共享",
+    "evidence": [
+      "修复后同一变量多次赋值可正常推断出多个结果",
+      "二次赋值不再产生Uninferable"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0059": {
+    "pattern_id": "pattern_0059",
+    "source_tasks": [
+      "inference.py:infer_attribute"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "属性推断"
+    ],
+    "trigger_condition": "嵌套属性推断时共享InferenceContext导致boundnode被覆盖",
+    "lesson": "不要直接修改传入的上下文，需创建副本隔离状态",
+    "fix_strategy": "在infer_attribute中先拷贝一份context，再设置boundnode，确保内层推断不影响外层。",
+    "evidence": [
+      "修复后class Test(level.Model)的Test.data推断成功"
+    ],
+    "success_count": 23,
+    "failure_count": 1,
+    "confidence": 0.95,
+    "last_used_at": "2026-08-31 05:40",
+    "status": "active"
+  },
+  "pattern_0060": {
+    "pattern_id": "pattern_0060",
+    "source_tasks": [
+      "bases.py:getattr"
+    ],
+    "domain": [
+      "astroid",
+      "Python",
+      "类型推断"
+    ],
+    "trigger_condition": "astroid brain中推断属性访问时误用Python内建getattr",
+    "lesson": "应使用astroid的igetattr/getattr，捕获InferenceError并转为AstroidTypeError",
+    "fix_strategy": "将内建getattr替换为astroid属性推断API，捕获AttributeError/InferenceError，转换为AstroidTypeError抛出",
+    "evidence": [
+      "str.format '{0.name}'访问int字面量属性时，修复后不再抛AttributeError而是AstroidTypeError"
+    ],
+    "success_count": 28,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 08:34",
+    "status": "deprecated"
+  },
+  "pattern_0061": {
+    "pattern_id": "pattern_0061",
+    "source_tasks": [
+      "helpers.py:safe_infer"
+    ],
+    "domain": [
+      "python",
+      "astroid",
+      "bug-fix"
+    ],
+    "trigger_condition": "直接访问AST节点的.value属性推断值",
+    "lesson": "不要假设节点是常量，应使用astroid推断安全获取值",
+    "fix_strategy": "实现safe_infer函数，用InferenceContext捕获InferenceError，替代.value访问",
+    "evidence": [
+      "修复后str.format模板属性访问不再抛出AttributeError"
+    ],
+    "success_count": 22,
+    "failure_count": 2,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-29 08:23",
+    "status": "deprecated"
+  },
+  "pattern_0062": {
+    "pattern_id": "pattern_0062",
+    "source_tasks": [
+      "fields.py:_deserialize"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "反序列化类型校验"
+    ],
+    "trigger_condition": "嵌套字段反序列化时输入可能非映射类型",
+    "lesson": "不可假设输入类型，需在入口校验，防止None引发TypeError",
+    "fix_strategy": "在Nested._deserialize中，当many=False时检查isinstance(value, Mapping)，否则调用self.fail('type', ...)显式报错。",
+    "evidence": [
+      "2.20.0缺少该检查导致字符串输入触发TypeError，添加检查后问题解决"
+    ],
+    "success_count": 14,
+    "failure_count": 2,
+    "confidence": 0.6499999999999999,
+    "last_used_at": "2026-08-29 12:01",
+    "status": "deprecated"
+  },
+  "pattern_0063": {
+    "pattern_id": "pattern_0063",
+    "source_tasks": [
+      "fields.py:_deserialize"
+    ],
+    "domain": [
+      "marshmallow",
+      "反序列化"
+    ],
+    "trigger_condition": "嵌套字段反序列化时输入非映射类型未校验",
+    "lesson": "在反序列化入口提前校验输入类型，防止内部依赖None等错误类型。",
+    "fix_strategy": "在Nested._deserialize中，非many模式检查isinstance(value, Mapping)，否则调用self.fail('type')。",
+    "evidence": [
+      "修复后输入字符串直接返回类型错误",
+      "不再触发NoneType subscriptable"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0064": {
+    "pattern_id": "pattern_0064",
+    "source_tasks": [
+      "marshalling.py:call_and_store"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "嵌套字段验证"
+    ],
+    "trigger_condition": "嵌套字段收到类型非法的输入(如字符串代替字典)",
+    "lesson": "反序列化可能产生None,后续字段验证需先判空",
+    "fix_strategy": "在调用字段验证器前检查data是否为None,是则跳过或安全处理",
+    "evidence": [
+      "marshmallow 2.20.0 中验证嵌套字段时因data为None触发TypeError"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0065": {
+    "pattern_id": "pattern_0065",
+    "source_tasks": [
+      "marshalling.py:call_and_store"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "反序列化"
+    ],
+    "trigger_condition": "嵌套字段传入错误类型导致内部验证器访问None数据",
+    "lesson": "反序列化失败时勿对无效数据继续执行字段验证器",
+    "fix_strategy": "在call_and_store中增加对data为None的保护，避免后续解包None",
+    "evidence": [
+      "修复后非Mapping输入不再触发TypeError",
+      "错误信息正确上报Invalid input type"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0066": {
+    "pattern_id": "pattern_0066",
+    "source_tasks": [
+      "raw_building.py:inspect_build"
+    ],
+    "domain": [
+      "Python",
+      "警告处理/异常捕获"
+    ],
+    "trigger_condition": "遍历对象属性时将警告转异常但except未覆盖所有Warning子类",
+    "lesson": "用simplefilter('error')时应捕获Warning基类,而非仅捕获DeprecationWarning等子类",
+    "fix_strategy": "将except (AttributeError, DeprecationWarning)扩展为except (AttributeError, Warning),或改用simplefilter只针对特定警告类别",
+    "evidence": [
+      "astroid PR #1719 修复后pandas导入不再触发FutureWarning泄漏",
+      "pylint #7205 报告的场景验证通过"
+    ],
+    "success_count": 17,
+    "failure_count": 1,
+    "confidence": 0.95,
+    "last_used_at": "2026-08-31 02:37",
+    "status": "active"
+  },
+  "pattern_0067": {
+    "pattern_id": "pattern_0067",
+    "source_tasks": [
+      "raw_building.py:_build_from_function"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "异常处理"
+    ],
+    "trigger_condition": "深度内省对象属性时，模块发出FutureWarning未捕获",
+    "lesson": "异常处理需覆盖所有可能的警告类型，不止DeprecationWarning，FutureWarning也需处理",
+    "fix_strategy": "在except中增加FutureWarning，或改为捕获更广泛的Warning基类，确保警告被安全吸收",
+    "evidence": [
+      "pandas FutureWarning不再导致AstroidError",
+      "astroid PR #1719 修复"
+    ],
+    "success_count": 22,
+    "failure_count": 0,
+    "confidence": 0.95,
+    "last_used_at": "2026-08-31 02:37",
+    "status": "active"
+  },
+  "pattern_0068": {
+    "pattern_id": "pattern_0068",
+    "source_tasks": [
+      "builder.py:module_build"
+    ],
+    "domain": [
+      "Python",
+      "AST introspection",
+      "警告处理"
+    ],
+    "trigger_condition": "内省第三方模块属性时触发未处理警告",
+    "lesson": "属性访问可能触发库自身警告,需用 catch_warnings 包裹防止冒泡",
+    "fix_strategy": "在 object_build 的 getattr 外层包裹 warnings.catch_warnings(),按需抑制或记录警告",
+    "evidence": [
+      "astroid PR #1719 修复 pandas FutureWarning 导致 AstroidError",
+      "pylint issue #7205 回归验证通过"
+    ],
+    "success_count": 5,
+    "failure_count": 0,
+    "confidence": 0.95,
+    "last_used_at": "",
+    "status": "active"
+  },
+  "pattern_0069": {
+    "pattern_id": "pattern_0069",
+    "source_tasks": [
+      "modutils.py:load_module_from_name"
+    ],
+    "domain": [
+      "Python依赖兼容",
+      "导入错误"
+    ],
+    "trigger_condition": "ImportError: cannot import name ... 库API迁移导致导入路径变化",
+    "lesson": "依赖库API变动时，直接导入新位置，或加兼容try/except。",
+    "fix_strategy": "先查库新版本中符号位置，更新import语句；若需兼容多版本，用try/except回退。",
+    "evidence": [
+      "astroid 2.7.3中Statement移入astroid.nodes，更新导入路径可修复"
+    ],
+    "success_count": 12,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 08:34",
+    "status": "deprecated"
+  },
+  "pattern_0070": {
+    "pattern_id": "pattern_0070",
+    "source_tasks": [
+      "modutils.py:load_module_from_name"
+    ],
+    "domain": [
+      "Python",
+      "依赖库兼容性",
+      "ImportError"
+    ],
+    "trigger_condition": "依赖库API变更导致ImportError，如导入已移除的名称",
+    "lesson": "先确认依赖版本与API变更，勿假设导入路径不变",
+    "fix_strategy": "更新导入来源为新的模块路径，或使用兼容的替代类/别名",
+    "evidence": [
+      "astroid 2.7.3移除Statement，将from astroid.node_classes import Statement改为from astroid import nodes即可"
+    ],
+    "success_count": 11,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 07:53",
+    "status": "deprecated"
+  },
+  "pattern_0071": {
+    "pattern_id": "pattern_0071",
+    "source_tasks": [
+      "as_string.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "visitor模式",
+      "字符串转换"
+    ],
+    "trigger_condition": "新增节点类型后，visitor缺少对应visit方法导致AttributeError",
+    "lesson": "visitor模式新增节点时需同步添加visit方法，或在入口处兜底特殊类型",
+    "fix_strategy": "在visitor的__call__入口处显式判断特殊节点类型，返回默认表示，避免调用accept分派",
+    "evidence": [
+      "修复后Unknown().as_string()返回'Unknown'，不再抛AttributeError"
+    ],
+    "success_count": 22,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 10:17",
+    "status": "deprecated"
+  },
+  "pattern_0072": {
+    "pattern_id": "pattern_0072",
+    "source_tasks": [
+      "as_string.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "astroid/Visitor模式"
+    ],
+    "trigger_condition": "Visitor模式中节点类缺少对应visit_方法时",
+    "lesson": "动态分派会因缺失visit方法崩溃,需兜底或确保方法存在",
+    "fix_strategy": "在入口检查缺失的visit_xxx并动态添加默认处理,或为未知节点类型提供通用fallback方法",
+    "evidence": [
+      "修复后Unknown().as_string()不再抛AttributeError"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0073": {
+    "pattern_id": "pattern_0073",
+    "source_tasks": [
+      "node_ng.py:as_string"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "访问者模式",
+      "字符串序列化"
+    ],
+    "trigger_condition": "访问者缺少某节点类型的 visit_ 方法",
+    "lesson": "对动态或未知节点要提供兜底，避免 accept 分发失败。",
+    "fix_strategy": "在 as_string 入口先判断 Unknown 节点并返回 'Uninferable'，否则再交给 AsStringVisitor。",
+    "evidence": [
+      "Unknown().as_string() 不再抛 AttributeError",
+      "返回 'Uninferable'"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0074": {
+    "pattern_id": "pattern_0074",
+    "source_tasks": [
+      "builder.py:open_source_file"
+    ],
+    "domain": [
+      "Python",
+      "文件处理/异常处理"
+    ],
+    "trigger_condition": "程序假设文件必然存在，而实际可能缺失（如命名空间包无__init__.py）",
+    "lesson": "打开可选文件前先检查存在性；缺失时返回空结果而非抛出异常，调用方应优雅降级。",
+    "fix_strategy": "在文件读取函数入口使用 os.path.exists 判断；不存在则返回约定空值（如 None），避免底层 OSError 被上层误报为解析错误。",
+    "evidence": [
+      "修复后 astroid 2.9.1+ 不再对缺少 __init__.py 的命名空间包触发 F0010",
+      "pylint 对 src/project 目录可正常完成扫描"
+    ],
+    "success_count": 9,
+    "failure_count": 0,
+    "confidence": 0.95,
+    "last_used_at": "",
+    "status": "active"
+  },
+  "pattern_0075": {
+    "pattern_id": "pattern_0075",
+    "source_tasks": [
+      "builder.py:open_source_file"
+    ],
+    "domain": [
+      "Python/astroid/pylint",
+      "文件加载与异常处理"
+    ],
+    "trigger_condition": "加载可选文件时未检查存在性，导致命名空间包缺失__init__.py报错",
+    "lesson": "打开文件前必须验证存在性；对可选文件应返回默认值而非抛错",
+    "fix_strategy": "在文件加载函数中先判断文件是否存在；若文件名为__init__.py且不存在，则返回空源模块对象，避免抛出AstroidBuildingError",
+    "evidence": [
+      "修复后pylint分析无__init__.py的包不再报F0010错误",
+      "同一修复在astroid 2.9.1/2.9.2版本上验证有效"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0076": {
+    "pattern_id": "pattern_0076",
+    "source_tasks": [
+      "builder.py:build_namespace_package_module"
+    ],
+    "domain": [
+      "Python",
+      "astroid/pylint",
+      "命名空间包解析错误"
+    ],
+    "trigger_condition": "处理无__init__.py的目录作为命名空间包时",
+    "lesson": "命名空间包没有__init__.py，不应设置package=True",
+    "fix_strategy": "在build_namespace_package_module中将package参数设为False",
+    "evidence": [
+      "修复后不再出现F0010 Unable to load file错误"
+    ],
+    "success_count": 2,
+    "failure_count": 0,
+    "confidence": 0.7,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0077": {
+    "pattern_id": "pattern_0077",
+    "source_tasks": [
+      "builder.py:parse"
+    ],
+    "domain": [
+      "Python",
+      "AST转换"
+    ],
+    "trigger_condition": "原生AST节点有但自定义AST节点缺失的属性",
+    "lesson": "转换原生AST时要显式复制新属性，所有节点统一初始化避免AttributeError",
+    "fix_strategy": "在visitor的visit_module中从原生ast.Module复制end_lineno和end_col_offset；或在Module.__init__中默认设为None",
+    "evidence": [
+      "修复后module.end_lineno和module.end_col_offset可访问"
+    ],
+    "success_count": 39,
+    "failure_count": 2,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-31 03:15",
+    "status": "deprecated"
+  },
+  "pattern_0078": {
+    "pattern_id": "pattern_0078",
+    "source_tasks": [
+      "builder.py:_post_build"
+    ],
+    "domain": [
+      "Python",
+      "AST工具"
+    ],
+    "trigger_condition": "AST根节点缺少可选位置属性，访问时抛AttributeError",
+    "lesson": "构建后处理需对所有节点统一初始化可选属性，避免缺失",
+    "fix_strategy": "在后处理函数(如_post_build)中为根节点及所有节点设置默认None的位置属性",
+    "evidence": [
+      "修复后module.end_lineno返回None而非异常"
+    ],
+    "success_count": 49,
+    "failure_count": 2,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-29 17:06",
+    "status": "deprecated"
+  },
+  "pattern_0079": {
+    "pattern_id": "pattern_0079",
+    "source_tasks": [
+      "validate.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "正则表达式",
+      "输入验证"
+    ],
+    "trigger_condition": "正则验证输入字符串完整性时使用$锚点",
+    "lesson": "Python正则$匹配末尾换行前位置，需用\\Z或显式拒绝换行符",
+    "fix_strategy": "检查所有验证正则中的$，替换为\\Z；若不便修改正则，在验证器开头检测\\n或\\r并直接抛出验证错误",
+    "evidence": [
+      "Issue指出Email验证器错误匹配末尾含换行字符串",
+      "Stack Overflow建议改用\\Z",
+      "修复方案中加入换行检查"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0080": {
+    "pattern_id": "pattern_0080",
+    "source_tasks": [
+      "validate.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "正则表达式",
+      "数据验证"
+    ],
+    "trigger_condition": "正则使用$结尾导致带换行符的非法输入被误判为有效",
+    "lesson": "Python中$会匹配末尾换行符之前的位置，应使用\\Z匹配字符串绝对末尾",
+    "fix_strategy": "审查所有验证正则，将结尾的$替换为\\Z，并补充含换行符的回归测试用例",
+    "evidence": [
+      "Stack Overflow指出$匹配换行符前的位置，\\Z才表示绝对末尾",
+      "marshmallow issue中确认Email正则错误匹配email@domain.com\\n"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0081": {
+    "pattern_id": "pattern_0081",
+    "source_tasks": [
+      "validate.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "输入验证"
+    ],
+    "trigger_condition": "正则校验要求匹配字符串完整末尾却使用$锚点",
+    "lesson": "Python正则$可匹配末尾换行前位置，导致换行绕过校验；应用\\Z确保绝对末尾",
+    "fix_strategy": "将所有校验正则中的$替换为\\Z，并增加对输入中换行符\\n或\\r的显式拦截，同时审查其他正则是否同样存在此问题",
+    "evidence": [
+      "https://stackoverflow.com/a/48730645",
+      "提供反例：'niceandsimple\\n@example.com' 可绕过原验证"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0082": {
+    "pattern_id": "pattern_0082",
+    "source_tasks": [
+      "validate.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "正则表达式/验证"
+    ],
+    "trigger_condition": "正则验证使用$锚点，且输入末尾可能含换行",
+    "lesson": "$在Python正则中匹配末尾换行前，验证不严格，应使用\\Z或fullmatch",
+    "fix_strategy": "将验证方法从match()改为fullmatch()，或把正则末尾$替换为\\Z，并检查其他类似正则",
+    "evidence": [
+      "原代码匹配email@domain.com\\n等，修复后通过fullmatch拒绝"
+    ],
+    "success_count": 22,
+    "failure_count": 0,
+    "confidence": 0.95,
+    "last_used_at": "2026-08-31 05:03",
+    "status": "active"
+  },
+  "pattern_0083": {
+    "pattern_id": "pattern_0083",
+    "source_tasks": [
+      "builder.py:_post_build"
+    ],
+    "domain": [
+      "Python/astroid",
+      "作用域分析"
+    ],
+    "trigger_condition": "walrus操作符在条件中定义变量，后续使用被误报未定义",
+    "lesson": "不要忽略walrus赋值作用域，条件中的赋值应视为立即定义",
+    "fix_strategy": "在AST构建时显式记录walrus赋值节点并绑定作用域，或调整inference使walrus目标在分支前可见",
+    "evidence": [
+      "Pylint W0631误报walrus定义变量的bug，修复后预期行为验证通过"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0084": {
+    "pattern_id": "pattern_0084",
+    "source_tasks": [
+      "helpers.py:safe_infer"
+    ],
+    "domain": [
+      "Python",
+      "astroid/pylint 静态分析"
+    ],
+    "trigger_condition": "safe_infer 对 walrus/多重推断结果误判为模糊",
+    "lesson": "用于判断歧义的二次推断结果需过滤非互斥噪声值",
+    "fix_strategy": "safe_infer 在取第二个结果时跳过重复节点和 Uninferable，仅当存在真正不同的语义结果才返回 None",
+    "evidence": [
+      "修复后 walrus 变量不再触发 W0631 误报"
+    ],
+    "success_count": 0,
+    "failure_count": 1,
+    "confidence": 0.3,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0085": {
+    "pattern_id": "pattern_0085",
+    "source_tasks": [
+      "raw_building.py:object_build"
+    ],
+    "domain": [
+      "Python",
+      "C扩展对象属性探测"
+    ],
+    "trigger_condition": "对可能为C扩展包装对象的成员使用hasattr探测属性时",
+    "lesson": "hasattr只捕获AttributeError，C扩展对象可能抛RuntimeError导致崩溃，应避免直接使用",
+    "fix_strategy": "用try-except包裹getattr并捕获所有异常，或改用类型检查（如isinstance模块）代替属性探测",
+    "evidence": [
+      "PyQt5 QtWidgets.qApp导致hasattr抛RuntimeError的崩溃案例，修复后不再触发"
+    ],
+    "success_count": 38,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 16:51",
+    "status": "deprecated"
+  },
+  "pattern_0086": {
+    "pattern_id": "pattern_0086",
+    "source_tasks": [
+      "raw_building.py:object_build"
+    ],
+    "domain": [
+      "Python",
+      "异常处理",
+      "扩展模块兼容性"
+    ],
+    "trigger_condition": "对不可信或扩展模块对象做hasattr检查可能抛出非AttributeError异常",
+    "lesson": "检查属性勿用hasattr，改用try/except捕获宽泛异常以避免崩溃",
+    "fix_strategy": "将hasattr替换为try: getattr(obj, name) except Exception: False，或捕获特定扩展异常类型",
+    "evidence": [
+      "PyQt5 qApp的RuntimeError不再崩溃，通过try/except处理验证"
+    ],
+    "success_count": 14,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 16:48",
+    "status": "deprecated"
+  },
+  "pattern_0087": {
+    "pattern_id": "pattern_0087",
+    "source_tasks": [
+      "raw_building.py:inspect_build"
+    ],
+    "domain": [
+      "Python",
+      "动态属性访问"
+    ],
+    "trigger_condition": "对C扩展/动态代理对象进行hasattr，可能抛非AttributeError异常",
+    "lesson": "内置hasattr只捕获AttributeError，外部对象可能抛RuntimeError等，须改用安全封装",
+    "fix_strategy": "用_safe_hasattr替代hasattr，捕获常见异常，避免任意异常向上传播",
+    "evidence": [
+      "PyQt5 qApp上hasattr触发RuntimeError，改用_safe_hasattr修复"
+    ],
+    "success_count": 33,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 16:34",
+    "status": "deprecated"
+  },
+  "pattern_0088": {
+    "pattern_id": "pattern_0088",
+    "source_tasks": [
+      "builder.py:module_build"
+    ],
+    "domain": [
+      "Python",
+      "对象内省",
+      "C扩展模块",
+      "异常安全"
+    ],
+    "trigger_condition": "内省模块成员时用hasattr检查属性，对象可能抛出非AttributeError异常",
+    "lesson": "hasattr只捕获AttributeError，C扩展等魔术对象会抛RuntimeError导致崩溃，应使用try/except Exception或安全getattr",
+    "fix_strategy": "在object_build等内省代码中，将属性检查改为try/except异常（如except Exception）或使用inspect.getattr_static，确保任何异常不会中断AST构建",
+    "evidence": [
+      "修复通过：PyQt5中QtWidgets.qApp被删除后不再触发RuntimeError崩溃",
+      "回归提交#1885，尤其是974f26f修复了该问题"
+    ],
+    "success_count": 37,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 16:56",
+    "status": "deprecated"
+  },
+  "pattern_0089": {
+    "pattern_id": "pattern_0089",
+    "source_tasks": [
+      "bases.py:_infer_type_new_call"
+    ],
+    "domain": [
+      "astroid",
+      "类型推断"
+    ],
+    "trigger_condition": "推断类型调用时基类列表含泛型基类（Subscript节点）",
+    "lesson": "基类不一定是ClassDef，泛型基类如Animal[Identity]是Subscript，需解包",
+    "fix_strategy": "在遍历bases时，先推断节点；若为Subscript，取其被订阅的类对象（如base.value）继续处理，而非直接返回None",
+    "evidence": [
+      "修复后Dog(Animal[Identity])可正确推断dog.identity可下标"
+    ],
+    "success_count": 37,
+    "failure_count": 0,
+    "confidence": 0.95,
+    "last_used_at": "2026-08-31 05:07",
+    "status": "active"
+  },
+  "pattern_0090": {
+    "pattern_id": "pattern_0090",
+    "source_tasks": [
+      "raw_building.py:object_build"
+    ],
+    "domain": [
+      "Python/C扩展",
+      "防御性编程"
+    ],
+    "trigger_condition": "对C扩展/包装对象使用hasattr时抛出非AttributeError异常",
+    "lesson": "hasattr只捕获AttributeError,其他异常会导致崩溃,需防御性处理",
+    "fix_strategy": "用try/except捕获可能的RuntimeError等异常,或先检查对象类型再hasattr",
+    "evidence": [
+      "PyQt5 QtWidgets.qApp触发RuntimeError: wrapped C/C++ object has been deleted"
+    ],
+    "success_count": 20,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-31 04:26",
+    "status": "deprecated"
+  },
+  "pattern_0091": {
+    "pattern_id": "pattern_0091",
+    "source_tasks": [
+      "raw_building.py:object_build"
+    ],
+    "domain": [
+      "Python",
+      "C扩展兼容"
+    ],
+    "trigger_condition": "遍历C扩展模块成员时getattr抛出非AttributeError异常",
+    "lesson": "C扩展成员可能抛RuntimeError等，不要只捕获AttributeError，应捕获更宽异常并安全降级",
+    "fix_strategy": "将object_build中的getattr异常处理从except AttributeError改为except Exception，并对hasattr调用使用try/except或contextlib.suppress，确保非标准异常不会导致崩溃。",
+    "evidence": [
+      "PyQt5 QtWidgets.qApp RuntimeError问题通过扩展异常捕获得到修复"
+    ],
+    "success_count": 26,
+    "failure_count": 2,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-31 03:54",
+    "status": "deprecated"
+  },
+  "pattern_0092": {
+    "pattern_id": "pattern_0092",
+    "source_tasks": [
+      "builder.py:module_build"
+    ],
+    "domain": [
+      "Python",
+      "C 扩展兼容"
+    ],
+    "trigger_condition": "对 C 扩展模块成员进行 hasattr 检查时可能引发 RuntimeError",
+    "lesson": "hasattr 只捕获 AttributeError，C 扩展可能抛其他异常导致崩溃",
+    "fix_strategy": "用 getattr 包裹 try/except Exception，或将 hasattr 替换为安全属性探测",
+    "evidence": [
+      "PyQt5 QtWidgets.qApp 触发 RuntimeError",
+      "astroid #1885 回归"
+    ],
+    "success_count": 13,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 16:56",
+    "status": "deprecated"
+  },
+  "pattern_0093": {
+    "pattern_id": "pattern_0093",
+    "source_tasks": [
+      "node_classes.py:__init__"
+    ],
+    "domain": [
+      "Python/astroid",
+      "节点推断/属性错误"
+    ],
+    "trigger_condition": "getitem遇到DictUnpack时,被解包值是Name等非Dict节点",
+    "lesson": "不能直接对解包表达式调用getitem,应先infer出实际对象",
+    "fix_strategy": "对被解包值使用infer(context)获取具体节点,再调用getitem并捕获AstroidTypeError/AstroidIndexError",
+    "evidence": [
+      "修复后 `{**X}` 的getitem能正确返回 'B'"
+    ],
+    "success_count": 3,
+    "failure_count": 3,
+    "confidence": 0.4,
+    "last_used_at": "2026-08-31 05:35",
+    "status": "active"
+  },
+  "pattern_0094": {
+    "pattern_id": "pattern_0094",
+    "source_tasks": [
+      "brain_builtin_inference.py:infer_getattr"
+    ],
+    "domain": [
+      "python",
+      "astroid",
+      "异常处理"
+    ],
+    "trigger_condition": "astroid模拟str.format求值时，遇到属性访问失败抛AttributeError",
+    "lesson": "模拟外部API时需捕获其可能抛出的全部异常，不能只按经验捕获部分异常类型，否则未处理异常会逃逸。",
+    "fix_strategy": "在_infer_str_format_call的try/except中增加except AttributeError，转换为AstroidTypeError或让推断失败返回None。",
+    "evidence": [
+      "增加了AttributeError捕获后，int字面量的{0.name}不再导致未处理AttributeError，而是按预期产生类型错误。"
+    ],
+    "success_count": 17,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-29 16:51",
+    "status": "deprecated"
+  },
+  "pattern_0095": {
+    "pattern_id": "pattern_0095",
+    "source_tasks": [
+      "helpers.py:safe_infer"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "异常处理"
+    ],
+    "trigger_condition": "调用 infer() 推断节点值时，意外抛出 AttributeError 等非预期异常",
+    "lesson": "安全推断函数需捕获 AttributeError，防止底层属性访问错误逃逸",
+    "fix_strategy": "在 safe_infer 的 try 块中增加 except AttributeError: return None，或将 AttributeError 纳入异常捕获范围",
+    "evidence": [
+      "str.format 模板求值不再触发 unhandled AttributeError",
+      "修复 pycqa/pylint#7939"
+    ],
+    "success_count": 9,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-31 04:34",
+    "status": "deprecated"
+  },
+  "pattern_0096": {
+    "pattern_id": "pattern_0096",
+    "source_tasks": [
+      "fields.py:_deserialize"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "反序列化输入验证"
+    ],
+    "trigger_condition": "嵌套字段反序列化时输入值非预期类型",
+    "lesson": "反序列化前必须验证输入类型，缺失校验会导致深层TypeError而非明确错误",
+    "fix_strategy": "在Nested._deserialize中，当many=False且value不是Mapping时，调用self.fail('type', input=value, type=value.__class__.__name__)并返回错误信息，中断后续流程",
+    "evidence": [
+      "修复后对Nested字段传入字符串时返回ValidationError而非TypeError",
+      "回归测试覆盖非映射输入，确保错误信息包含字段类型提示"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0097": {
+    "pattern_id": "pattern_0097",
+    "source_tasks": [
+      "fields.py:_deserialize"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "序列化/反序列化",
+      "类型校验"
+    ],
+    "trigger_condition": "嵌套字段输入类型不符，内部校验操作None时报TypeError",
+    "lesson": "解析嵌套数据前必须校验输入类型，不能依赖内部深层报错",
+    "fix_strategy": "在Nested._deserialize中判断many=False时输入必须是Mapping，否则fail('type')",
+    "evidence": [
+      "修复后字符串不再传入内部schema，提前返回类型错误"
+    ],
+    "success_count": 4,
+    "failure_count": 0,
+    "confidence": 0.8999999999999999,
+    "last_used_at": "2026-08-31 05:49",
+    "status": "active"
+  },
+  "pattern_0098": {
+    "pattern_id": "pattern_0098",
+    "source_tasks": [
+      "raw_building.py:inspect_build"
+    ],
+    "domain": [
+      "Python",
+      "异常处理",
+      "深度内省"
+    ],
+    "trigger_condition": "内省第三方模块成员时,getattr触发未预期的警告子类",
+    "lesson": "except 应捕获 Warning 基类而非特定子类,以免遗漏 FutureWarning 等变体",
+    "fix_strategy": "在 object_build 的 try/except 中将捕获的异常类型从 (AttributeError, DeprecationWarning) 扩展/替换为 (AttributeError, Warning),或使用 warnings.catch_warnings() 期间将 simplefilter(\"error\") 产生的所有警告统一按 Warning 捕获处理,避免只处理 DeprecationWarning 而漏掉 FutureWarning。",
+    "evidence": [
+      "astroid PR #1719 修复此问题",
+      "pylint issue #7205 报告崩溃",
+      "pandas 对废弃属性发出 FutureWarning 而非 DeprecationWarning"
+    ],
+    "success_count": 5,
+    "failure_count": 0,
+    "confidence": 0.95,
+    "last_used_at": "",
+    "status": "active"
+  },
+  "pattern_0099": {
+    "pattern_id": "pattern_0099",
+    "source_tasks": [
+      "as_string.py:__call__"
+    ],
+    "domain": [
+      "Python",
+      "访问者模式"
+    ],
+    "trigger_condition": "访问者模式中缺失对应visit方法导致AttributeError",
+    "lesson": "反射调用访问者方法时应提供默认回退，而不是直接getattr",
+    "fix_strategy": "用getattr(visitor, method_name, None)获取方法，若为None则返回str(node)或兜底处理",
+    "evidence": [
+      "修复后as_string对Unknown节点不再抛出AttributeError"
+    ],
+    "success_count": 6,
+    "failure_count": 2,
+    "confidence": 0.7,
+    "last_used_at": "2026-08-31 05:10",
+    "status": "deprecated"
+  },
+  "pattern_0100": {
+    "pattern_id": "pattern_0100",
+    "source_tasks": [
+      "brain_builtin_inference.py:_infer_getattr_args"
+    ],
+    "domain": [
+      "Python/astroid",
+      "str.format inference"
+    ],
+    "trigger_condition": "str.format模板求值访问不存在属性时抛AttributeError",
+    "lesson": "不能直接对字面量取属性；捕获AttributeError并转为AstroidTypeError",
+    "fix_strategy": "在推断str.format参数时，对属性访问使用安全getattr或try/except AttributeError，将错误转换为类型推断错误，避免未处理异常向上传播",
+    "evidence": [
+      "修复后 `'{0.name}'.format(int_literal)` 不再触发未处理 AttributeError",
+      "符合 issue 预期行为，应返回 AstroidTypeError",
+      "关联 pycqa/pylint#7939"
+    ],
+    "success_count": 38,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-31 04:26",
+    "status": "deprecated"
+  },
+  "pattern_0101": {
+    "pattern_id": "pattern_0101",
+    "source_tasks": [
+      "fields.py:_deserialize"
+    ],
+    "domain": [
+      "marshmallow",
+      "反序列化/类型校验"
+    ],
+    "trigger_condition": "反序列化分支只对某些模式校验类型，其他分支直接透传",
+    "lesson": "入口处对所有分支校验输入类型，避免非法数据流入下游",
+    "fix_strategy": "在每个条件分支前统一检查类型，非法输入返回自身错误而非下游异常",
+    "evidence": [
+      "修复后 many=False 传入非Mapping会触发 self.fail('type') 而非 TypeError"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0102": {
+    "pattern_id": "pattern_0102",
+    "source_tasks": [
+      "fields.py:_deserialize"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow反序列化"
+    ],
+    "trigger_condition": "Nested字段收到非映射类型输入且定义了字段验证器",
+    "lesson": "反序列化入口需校验输入类型，避免无效值传递到后续验证导致None下标",
+    "fix_strategy": "在Nested._deserialize中先判断many和Mapping类型，非预期输入立即调用self.fail并抛出ValidationError",
+    "evidence": [
+      "修复后输入'invalid'直接返回ValidationError，不再触发TypeError",
+      "保留了原有Mapping和集合输入的正常处理路径"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0103": {
+    "pattern_id": "pattern_0103",
+    "source_tasks": [
+      "brain_builtin_inference.py:_infer_str_format_call"
+    ],
+    "domain": [
+      "Python",
+      "astroid推断",
+      "str.format"
+    ],
+    "trigger_condition": "推断str.format调用且参数包含**kwargs解包时",
+    "lesson": "直接执行format会因缺失键抛KeyError,应安全降级为Uninferable",
+    "fix_strategy": "在_infer_str_format_call中检测调用参数是否包含Starred节点(尤其**kwargs),若是则返回Uninferable,不执行模板格式化",
+    "evidence": [
+      "修复后不再崩溃,返回Uninferable避免抛异常"
+    ],
+    "success_count": 23,
+    "failure_count": 2,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-31 05:07",
+    "status": "deprecated"
+  },
+  "pattern_0104": {
+    "pattern_id": "pattern_0104",
+    "source_tasks": [
+      "brain_builtin_inference.py:_infer_object__new__decorator"
+    ],
+    "domain": [
+      "Python",
+      "静态分析/类型推断"
+    ],
+    "trigger_condition": "推断被@object.__new__装饰的函数时",
+    "lesson": "延迟实例化会导致后续属性推断错误，应即时实例化",
+    "fix_strategy": "在装饰器推断函数中直接返回node.instantiate_class(context=context)，避免返回延迟包装",
+    "evidence": [
+      "aiohttp/VLCTelnet案例修复，pylint假阳性消失"
+    ],
+    "success_count": 11,
+    "failure_count": 0,
+    "confidence": 0.95,
+    "last_used_at": "2026-08-31 05:39",
+    "status": "active"
+  },
+  "pattern_0105": {
+    "pattern_id": "pattern_0105",
+    "source_tasks": [
+      "inference.py:infer_attribute"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "inference",
+      "context污染"
+    ],
+    "trigger_condition": "函数接收外部InferenceContext但直接复用修改其状态",
+    "lesson": "修改传入的context前必须复制，避免递归推断时污染上下文",
+    "fix_strategy": "在infer_attribute入口处，若context非None则使用contextmod.copy_context(context)创建副本，否则新建InferenceContext；后续对context的修改只在副本上进行",
+    "evidence": [
+      "修复后class Test(level.Model)场景推断Test.data不再触发异常"
+    ],
+    "success_count": 3,
+    "failure_count": 0,
+    "confidence": 0.7999999999999999,
+    "last_used_at": "",
+    "status": "active"
+  },
+  "pattern_0106": {
+    "pattern_id": "pattern_0106",
+    "source_tasks": [
+      "inference_tip.py:_inference_tip_cached"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "静态推断/格式化字符串"
+    ],
+    "trigger_condition": "推断str.format()时执行用户格式串，实参为None触发TypeError",
+    "lesson": "静态推断执行用户代码时，运行时类型异常须捕获并降级为Uninferable",
+    "fix_strategy": "将format_template.format(*pos_values, **keyword_values)包裹在try/except TypeError中，捕获后yield util.Uninferable，避免异常泄漏到调用栈",
+    "evidence": [
+      "验证修复后不再抛出TypeError，返回Uninferable；相关测试通过"
+    ],
+    "success_count": 18,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-31 05:18",
+    "status": "deprecated"
+  },
+  "pattern_0107": {
+    "pattern_id": "pattern_0107",
+    "source_tasks": [
+      "fields.py:_deserialize"
+    ],
+    "domain": [
+      "Python",
+      "反序列化/校验"
+    ],
+    "trigger_condition": "解析输入前未验证类型,导致下游对None做下标操作",
+    "lesson": "应在解析入口验证输入类型,防止None或错误类型传递到底层",
+    "fix_strategy": "在_deserialize中对非集合(Nested)或非映射值调用fail返回校验错误",
+    "evidence": [
+      "修复后invalid嵌套输入返回errors而非TypeError"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0108": {
+    "pattern_id": "pattern_0108",
+    "source_tasks": [
+      "fields.py:_deserialize"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "输入校验"
+    ],
+    "trigger_condition": "嵌套字段反序列化时未校验输入类型，导致内部处理异常",
+    "lesson": "入口处应显式校验输入类型，避免非法值传入更深逻辑后产生间接TypeError",
+    "fix_strategy": "在_deserialize中根据many分支检查类型：many=True需is_collection，many=False需isinstance(Mapping)，不满足则调用self.fail('type',...)",
+    "evidence": [
+      "修复后`Foo.validate({'bar':'invalid'})`不再抛TypeError，而返回校验错误"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0109": {
+    "pattern_id": "pattern_0109",
+    "source_tasks": [
+      "raw_building.py:object_build"
+    ],
+    "domain": [
+      "Python",
+      "防御性编程"
+    ],
+    "trigger_condition": "对C扩展或外部对象使用hasattr可能抛非AttributeError异常",
+    "lesson": "hasattr仅捕获AttributeError，C扩展可能抛RuntimeError等，需捕获Exception",
+    "fix_strategy": "定义_safe_hasattr，内部try/except Exception返回False，替换直接hasattr调用",
+    "evidence": [
+      "PyQt5 QtWidgets.qApp已删除对象导致的RuntimeError崩溃通过此模式修复"
+    ],
+    "success_count": 10,
+    "failure_count": 2,
+    "confidence": 0.55,
+    "last_used_at": "2026-08-31 04:26",
+    "status": "deprecated"
+  },
+  "pattern_0110": {
+    "pattern_id": "pattern_0110",
+    "source_tasks": [
+      "brain_builtin_inference.py:infer_getattr"
+    ],
+    "domain": [
+      "python",
+      "astroid",
+      "inference",
+      "错误处理"
+    ],
+    "trigger_condition": "推理函数中求值参数可能引发属性异常",
+    "lesson": "不要在推理时让 AttributeError 等异常泄漏；捕获并返回 Uninferable",
+    "fix_strategy": "在 _infer_str_format_call 中，对属性访问/模板求值部分用 try-except 捕获 AttributeError、IndexError、KeyError 等，返回 iter([util.Uninferable]) 或抛出 AstroidTypeError",
+    "evidence": [
+      "bug: Unhandled AttributeError during str.format template evaluation",
+      "修复方案: 定义 _safe_infer 捕获 StopIteration/InferenceError 等异常"
+    ],
+    "success_count": 6,
+    "failure_count": 2,
+    "confidence": 0.7,
+    "last_used_at": "2026-08-31 05:10",
+    "status": "deprecated"
+  },
+  "pattern_0111": {
+    "pattern_id": "pattern_0111",
+    "source_tasks": [
+      "brain_builtin_inference.py:infer_getattr"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "str.format模板推断"
+    ],
+    "trigger_condition": "str.format模板求值访问不存在属性时未捕获AttributeError",
+    "lesson": "推断代码时需捕获与运行时一致的所有异常类型，包括AttributeError。",
+    "fix_strategy": "在str.format模板求值的异常捕获列表中显式添加AttributeError（或捕获更通用的属性推断异常），避免未处理异常向上传播。",
+    "evidence": [
+      "原始bug报告显示AttributeError未被捕获，修复后应转为AstroidTypeError或正常推断结果"
+    ],
+    "success_count": 8,
+    "failure_count": 2,
+    "confidence": 0.75,
+    "last_used_at": "2026-08-31 05:10",
+    "status": "deprecated"
+  },
+  "pattern_0112": {
+    "pattern_id": "pattern_0112",
+    "source_tasks": [
+      "brain_builtin_inference.py:_infer_getattr_args"
+    ],
+    "domain": [
+      "Python",
+      "astroid",
+      "异常处理",
+      "AST推断"
+    ],
+    "trigger_condition": "推断 str.format 调用时未捕获属性访问异常",
+    "lesson": "格式模板属性访问失败会抛 AttributeError，推断需捕获并转为类型错误或回退默认推断",
+    "fix_strategy": "在 _infer_str_format_call 的 except 元组中加入 AttributeError；同时删除重复的函数定义，统一保留覆盖所有相关异常的异常处理逻辑。",
+    "evidence": [
+      "原始 bug 显示 {0.name} 对 int 访问属性触发未处理 AttributeError",
+      "现有 except 仅捕获 IndexError、KeyError、TypeError、ValueError",
+      "存在两个同名 _infer_str_format_call，后者覆盖前者，前者已包含 AttributeError 捕获"
+    ],
+    "success_count": 4,
+    "failure_count": 3,
+    "confidence": 0.4,
+    "last_used_at": "2026-08-31 05:35",
+    "status": "active"
+  },
+  "pattern_0113": {
+    "pattern_id": "pattern_0113",
+    "source_tasks": [
+      "fields.py:_deserialize"
+    ],
+    "domain": [
+      "Python",
+      "marshmallow",
+      "输入验证"
+    ],
+    "trigger_condition": "嵌套字段输入非预期类型时缺少类型检查",
+    "lesson": "反序列化入口需校验输入类型，拒绝无效数据，避免下游隐性崩溃",
+    "fix_strategy": "在字段反序列化方法中增加类型判断，对不符合类型的输入调用self.fail('type')显式报错",
+    "evidence": [
+      "修复前复现代码引发TypeError，修复后返回正常验证错误"
+    ],
+    "success_count": 0,
+    "failure_count": 0,
+    "confidence": 0.5,
+    "last_used_at": "",
+    "status": "candidate"
+  },
+  "pattern_0114": {
+    "pattern_id": "pattern_0114",
+    "source_tasks": [
+      "inference.py:infer_call"
+    ],
+    "domain": [
+      "Python",
+      "静态分析/推理引擎"
+    ],
+    "trigger_condition": "推理中调用底层格式化/属性访问等操作时抛出非astroid异常",
+    "lesson": "在实现推理逻辑时，将底层Python异常转换为InferenceError或Uninferable，避免泄漏",
+    "fix_strategy": "包装调用入口，捕获AttributeError等具体异常并抛出InferenceError，确保推理流程稳定",
+    "evidence": [
+      "修复str.format模板中访问非存在属性导致未处理的AttributeError，验证通过"
+    ],
+    "success_count": 5,
+    "failure_count": 0,
+    "confidence": 0.95,
+    "last_used_at": "2026-08-31 05:49",
+    "status": "active"
+  }
+}
